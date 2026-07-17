@@ -1,0 +1,12 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Claude Code local settings
+.claude/settings.local.json
