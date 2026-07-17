@@ -1,5 +1,5 @@
 
 # Customer Distance API
 
-Homework project comparing Superpowers and BMAD-METHOD on the same PostgreSQL REST API task.
+Ez a házi feladat ugyanazon PostgreSQL REST API feladaton keresztül hasonlítja össze a Superpowers és a BMAD-METHOD módszertant.
 
