@@ -62,13 +62,15 @@ CREATE TABLE IF NOT EXISTS customers (
 );
 ```
 
+- `id`, `name`, `telepules`, `lat`, `lon` a required minimum mezőhalmaz — mindegyik szerepel a táblában.
+- `lat` és `lon` **nullable** (nincs `NOT NULL` megkötés rajtuk): ha egy település nem azonosítható a referenciában, mindkettő `NULL` marad, a sor egyébként rendben létrejön.
 - `budget` és `note` tárolva van (megvan a seedben, olcsó hozzáadni), de nem kötelező üzleti logika épül rá.
 - `countryCode` nem kerül be a táblába: a 15 seed-városban nincs névütközés különböző országok között, nincs szükség rá a település-egyeztetéshez, feleslegesen bővítené a modellt (YAGNI).
 - `UNIQUE (name)` teszi lehetővé az idempotens seedelést: a seed script `INSERT ... ON CONFLICT (name) DO UPDATE` upsertet végez, így kétszeri futtatás frissíti (nem duplázza) a sorokat.
 
 ## Geokódolási referencia
 
-`src/geocode/reference.ts`: statikus `Record<string, {lat: number, lon: number}>`, kulcsai a 15 seed-városra normalizált településnevek (Budapest, Vienna, Munich, Milan, Barcelona, Lyon, Kraków, Prague, Lisbon, Amsterdam, Stockholm, Ljubljana, Bucharest, Dublin, Copenhagen), ismert (nyilvánosan dokumentált) koordinátákkal.
+`src/geocode/reference.ts`: statikus `Record<string, {lat: number, lon: number}>`, kulcsai a 15 seed-városra normalizált településnevek (Budapest, Vienna, Munich, Milan, Barcelona, Lyon, Kraków, Prague, Lisbon, Amsterdam, Stockholm, Ljubljana, Bucharest, Dublin, Copenhagen), ismert (nyilvánosan dokumentált) koordinátákkal. A táblázat a repóba bundle-olt, statikus TypeScript adat — sem a seedelés, sem a `/customers/by-distance` végpont futása közben **nincs hálózati hívás vagy külső geokódoló API** igénybe véve.
 
 A Budapest-koordináta egy megosztott `BUDAPEST` konstans, amit:
 1. a referencia-táblában a "budapest" kulcs alatt használunk,
@@ -91,6 +93,8 @@ Ez garantálja, hogy a budapesti ügyfelek pontosan `distanceKm: 0.0`-t kapnak (
 Ha a normalizált kulcs nincs a referenciában: `lat = null`, `lon = null`. A seed script `console.warn`-nal logolja a települést és folytatja — **nem dob hibát, nem állítja le a folyamatot**.
 
 ## Betöltés (idempotens seed)
+
+A `seed-customers.json` pontosan **15 ügyfelet** tartalmaz; a seed script mind a 15 bejegyzést beolvassa és upsertálja — ez az elvárt végállapot (`/customers/count` == 15 seedelés után).
 
 `scripts/seed.ts`:
 1. Beolvassa a `seed-customers.json`-t.
