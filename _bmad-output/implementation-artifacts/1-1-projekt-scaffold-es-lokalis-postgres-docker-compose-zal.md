@@ -4,7 +4,7 @@ baseline_commit: 6e795717ed714db84e6c41f1ed68ec73a232fe67
 
 # Story 1.1: Projekt-scaffold és lokális Postgres Docker Compose-zal
 
-Status: in-progress
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -59,10 +59,10 @@ hogy legyen hova migrálni és seedelni.
   - [x] **Fontos, nem nyilvánvaló hiba-forrás:** a jelenlegi `.gitignore` `.env.*` mintája a `.env.example`-t is kizárná a git-ből. Egészítsd ki a `.gitignore`-t egy `!.env.example` negációs sorral közvetlenül a `.env.*` sor után, majd `git status`/`git add -n .env.example`-lel ellenőrizd, hogy a fájl valóban trackelhető.
   - [x] Egészítsd ki a `.gitignore`-t a build/teszt-output bejegyzésekkel is: `dist/` (a `tsconfig.json` `outDir`-ja) és `coverage/` (jövőbeli teszt-coverage kimenet).
 
-- [ ] **Task 5 — Végigfutási ellenőrzés és delivery (AC: #1–#7)**
-  - [ ] Futtasd végig egy tiszta állapotból: `docker compose up -d` → mindkét DB létezik → `rm -rf node_modules && npm ci` → hibamentes → `package.json` typescript mező pontosan `6.0.2` → mind a 7 `src/` réteg-könyvtár létezik → `.env.example` létezik és git által trackelt (nem ignorált).
-  - [ ] `docker compose down` (a volume megtartható a következő story-hoz, vagy `docker compose down -v` ha teljesen tiszta állapotot akarsz — mindkettő rendben van, dokumentáld melyiket futtattad).
-  - [ ] Delivery norma (NFR7, PRD §2 Evaluation Context): a változtatásokat több kicsi, fókuszált commitra bontsd, ne egyetlen mindent-összefogó commitra — pl. külön commit a `.gitignore`+könyvtár-vázra, külön a Docker Compose-ra, külön a `package.json`/`tsconfig.json`-ra, külön a `.env.example`-ra. Ne committolj valódi titkot (ez a story tudatosan csak nem-titkos, lokális dev-credentialokat használ).
+- [x] **Task 5 — Végigfutási ellenőrzés és delivery (AC: #1–#7)**
+  - [x] Futtasd végig egy tiszta állapotból: `docker compose up -d` → mindkét DB létezik → `rm -rf node_modules && npm ci` → hibamentes → `package.json` typescript mező pontosan `6.0.2` → mind a 7 `src/` réteg-könyvtár létezik → `.env.example` létezik és git által trackelt (nem ignorált). **Mindegyik ellenőrzés sikeres volt.**
+  - [x] `docker compose down` (volume megtartva a `pgdata` named volume-ban a következő story-hoz — nem futtattam `-v`-t).
+  - [x] Delivery norma (NFR7, PRD §2 Evaluation Context): a változtatások 5 kicsi, fókuszált commitra lettek bontva (forrásfa-váz; Node/TS init; Docker Compose; .env.example+.gitignore; ez a lezáró story-frissítés), nem egyetlen mindent-összefogó commitban. Nincs valódi titok committolva.
 
 ## Dev Notes
 
@@ -197,8 +197,43 @@ A `!.env.example` sort a meglévő `.env.*` sor UTÁN kell felvenni (a git a neg
 
 ### Agent Model Used
 
+claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
+
 ### Debug Log References
+
+- Port conflict on `docker compose up -d`: host port 5432 already bound by an unrelated container (`smartbasket-pg`, postgres:17, different project). Resolved by remapping to host port `5433:5432` in `docker-compose.yml` and `.env.example` — purely local, reversible, does not affect the other container. See Dev Notes and Task 3.
+- Local Node runtime is v23.5.0, not the `>=24` declared in `package.json` `engines` — `npm install`/`npm ci` emit an `EBADENGINE` warning (not an error) each time; expected per Task 2 notes, not fixed (CI/deployment should use Node 24).
 
 ### Completion Notes List
 
+- All 7 ACs verified end-to-end from a clean state (`docker compose up -d`, `npm ci`, directory check, `.env.example` git-tracked check) in Task 5 — all passed.
+- No `.ts` source files created (correct per Task 1/AD-10 — later stories 1.2/1.4/2.x own that code); `npm run build` will report "No inputs were found" until then, which is expected.
+- No application dependencies installed beyond `typescript`/`@types/node` (AD-10 — each later story installs what it needs: `pg` in 1.4, `node-pg-migrate` in 1.2, Express in 2.2, Vitest in 2.1).
+- Postgres container stopped (`docker compose down`, volume preserved) at the end of the story since no further story is being implemented in this session; `docker compose up -d` will resume with the same data via the `pgdata` named volume.
+
 ### File List
+
+**New:**
+- `package.json`
+- `package-lock.json`
+- `tsconfig.json`
+- `docker-compose.yml`
+- `docker/initdb/01-create-test-db.sql`
+- `.env.example`
+- `src/config/.gitkeep`
+- `src/db/.gitkeep`
+- `src/geocoding/.gitkeep`
+- `src/repositories/.gitkeep`
+- `src/services/.gitkeep`
+- `src/routes/.gitkeep`
+- `src/middleware/.gitkeep`
+- `migrations/.gitkeep`
+- `test/unit/.gitkeep`
+- `test/integration/.gitkeep`
+
+**Modified:**
+- `.gitignore` (added `!.env.example` negation, `dist/`, `coverage/`)
+
+### Change Log
+
+- 2026-07-18: Story 1.1 implemented end-to-end (Tasks 1–5), all 7 ACs verified, status set to `review`.
