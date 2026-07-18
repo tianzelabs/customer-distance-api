@@ -1,19 +1,26 @@
 services:
   postgres:
     image: postgres:18
-    container_name: customer-distance-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: customer_distance
     ports:
-      - "5433:5432"
+      # Bound to localhost only — these are local dev credentials, not meant
+      # to be reachable from the local network.
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql
+      # NOTE: scripts here only run on the FIRST container start against an
+      # empty volume. If customer_distance_test is ever missing, run
+      # `docker compose down -v` (drops the volume) then `up -d` again to
+      # re-trigger init.
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d customer_distance"]
+      # Checks BOTH logical databases so a silently-skipped initdb script
+      # (see volumes note above) doesn't get masked by a "healthy" status.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d customer_distance && pg_isready -U postgres -d customer_distance_test"]
       interval: 5s
       timeout: 5s
       retries: 10
