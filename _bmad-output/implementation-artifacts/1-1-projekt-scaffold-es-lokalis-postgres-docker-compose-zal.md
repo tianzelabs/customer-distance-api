@@ -45,12 +45,14 @@ hogy legyen hova migrálni és seedelni.
 
   **Megjegyzés a helyi környezetről:** a fejlesztői gépen Node v23.5.0 fut (nem 24) — az `npm install` ezért `EBADENGINE` warningot ad, ami elvárt és nem hiba (a `package.json` `engines` mezője dokumentációs célú megkötés, nem blokkol telepítést). A CI/deployment környezetnek Node 24-et kell használnia.
 
-- [ ] **Task 3 — Docker Compose: `postgres:18`, két logikai adatbázissal (AC: #1, #2)**
-  - [ ] Hozd létre a `docker-compose.yml`-t a repo gyökerében a Dev Notes-ban megadott pontos tartalommal.
-  - [ ] Hozd létre a `docker/initdb/01-create-test-db.sql` fájlt egyetlen `CREATE DATABASE customer_distance_test;` utasítással — ez a hivatalos `postgres` image inicializációs mechanizmusa második logikai adatbázis létrehozására (a `POSTGRES_DB` env változó csak egyetlen adatbázist hoz létre alapból).
-  - [ ] Indítsd el: `docker compose up -d`, várd meg amíg a healthcheck `healthy`-re vált (`docker compose ps`).
-  - [ ] Ellenőrizd mindkét adatbázis létét: `docker compose exec postgres psql -U postgres -c "\l"` — a kimenetnek tartalmaznia kell `customer_distance` és `customer_distance_test` sorokat.
-  - [ ] Ellenőrizd, hogy a konténer PostgreSQL 18-at futtat: `docker compose exec postgres psql -U postgres -c "SELECT version();"`.
+- [x] **Task 3 — Docker Compose: `postgres:18`, két logikai adatbázissal (AC: #1, #2)**
+  - [x] Hozd létre a `docker-compose.yml`-t a repo gyökerében a Dev Notes-ban megadott pontos tartalommal.
+  - [x] Hozd létre a `docker/initdb/01-create-test-db.sql` fájlt egyetlen `CREATE DATABASE customer_distance_test;` utasítással — ez a hivatalos `postgres` image inicializációs mechanizmusa második logikai adatbázis létrehozására (a `POSTGRES_DB` env változó csak egyetlen adatbázist hoz létre alapból).
+  - [x] Indítsd el: `docker compose up -d`, várd meg amíg a healthcheck `healthy`-re vált (`docker compose ps`).
+  - [x] Ellenőrizd mindkét adatbázis létét: `docker compose exec postgres psql -U postgres -c "\l"` — a kimenetnek tartalmaznia kell `customer_distance` és `customer_distance_test` sorokat.
+  - [x] Ellenőrizd, hogy a konténer PostgreSQL 18-at futtat: `docker compose exec postgres psql -U postgres -c "SELECT version();"`.
+
+  **Végrehajtás közben felmerült, nem-blokkoló környezeti ütközés:** a fejlesztői gépen már fut egy másik, ehhez a projekthez nem tartozó Postgres konténer (`smartbasket-pg`, postgres:17) az 5432-es host-porton. Ez nem AC-, sem architektúra-szintű probléma, csak lokális port-ütközés — a fix a host port 5433-ra állítása a `docker-compose.yml`-ben és az `.env.example`-ben (a konténeren belüli port marad 5432, csak a host-oldali mapping változott). Lásd a lenti pontos fájltartalmakat és Dev Notes.
 
 - [ ] **Task 4 — `.env.example` és `.gitignore` javítás (AC: #6, #7)**
   - [ ] Hozd létre a `.env.example`-t a repo gyökerében a Dev Notes-ban megadott pontos tartalommal (`DATABASE_URL`, `TEST_DATABASE_URL`, `PORT`, a Docker Compose dev-credential-jeivel megegyező, nem-titkos alapértékekkel).
@@ -74,6 +76,7 @@ hogy legyen hova migrálni és seedelni.
 - **Docker multi-db mechanizmus:** a hivatalos `postgres` image `POSTGRES_DB` env változója csak **egyetlen** adatbázist hoz létre indításkor. A második logikai adatbázis (`customer_distance_test`) létrehozásának bevett módja egy inicializációs script mountolása a `/docker-entrypoint-initdb.d/` könyvtárba — ez a script (SQL vagy shell) csak **üres** data-directory mellett fut le (első indításkor). Ez a story egy egyszerű `CREATE DATABASE customer_distance_test;` SQL scriptet használ erre a célra, a `docker/initdb/` könyvtárban, read-only mountolva. Ha a compose volume-ot már inicializálták (pl. újrafuttatás régi volume-mal), az init script NEM fut le újra — ilyenkor `docker compose down -v` (volume törlés) szükséges, majd újra `up -d`.
 - **PostgreSQL 18 image útvonal-váltás:** a `postgres:18` image-ben a `PGDATA` alapértelmezett útvonala verzió-specifikussá vált (`/var/lib/postgresql/18/docker`), és a deklarált `VOLUME` is `/var/lib/postgresql`-re változott (a korábbi `/var/lib/postgresql/data` helyett). A `docker-compose.yml`-ben a named volume-ot `/var/lib/postgresql`-re mountold, NE `/var/lib/postgresql/data`-ra — egy régebbi PG16/17 példa változtatás nélküli másolása itt hibás konténerindítást okozna.
 - **`.gitignore` csapda:** a repóban már létező `.gitignore` `.env.*` mintája alapból kizárná a `.env.example`-t is a verziókezelésből. Ezt Task 4 explicit javítja egy `!.env.example` negációs sorral.
+- **Host port 5433 (nem az alapértelmezett 5432):** a fejlesztői gépen egy másik, ehhez a projekthez nem tartozó Postgres konténer már foglalja az 5432-es host-portot. A `docker-compose.yml` és az `.env.example` ezért az 5433 host-portot mappeli a konténer belső 5432-es portjára (`"5433:5432"`) — ez tisztán lokális, a repóra korlátozott, reverzibilis megoldás, nem érinti a másik konténert.
 
 ### `docker-compose.yml` — pontos tartalom
 
@@ -88,7 +91,7 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: customer_distance
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
@@ -113,11 +116,13 @@ CREATE DATABASE customer_distance_test;
 ```
 # Postgres connection for the app (customer_distance DB).
 # Local Docker Compose dev credentials only — not a real secret.
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/customer_distance
+# Host port 5433 (not the Postgres default 5432) to avoid clashing with
+# any other local Postgres instance already using 5432 on your machine.
+DATABASE_URL=postgresql://postgres:postgres@localhost:5433/customer_distance
 
 # Postgres connection used ONLY by integration tests (customer_distance_test DB).
 # Integration tests must fail-stop if this is unset — never fall back to DATABASE_URL (AD-9).
-TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/customer_distance_test
+TEST_DATABASE_URL=postgresql://postgres:postgres@localhost:5433/customer_distance_test
 
 # HTTP port the server listens on. Optional — a default is documented where PORT is
 # consumed (src/config/env.ts, Story 1.4/2.2).

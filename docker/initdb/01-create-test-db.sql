@@ -1,0 +1,1 @@
+CREATE DATABASE customer_distance_test;
