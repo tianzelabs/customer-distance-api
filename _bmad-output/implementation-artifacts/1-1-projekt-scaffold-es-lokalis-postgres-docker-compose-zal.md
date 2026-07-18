@@ -1,6 +1,10 @@
+---
+baseline_commit: 6e795717ed714db84e6c41f1ed68ec73a232fe67
+---
+
 # Story 1.1: Projekt-scaffold és lokális Postgres Docker Compose-zal
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,12 +26,12 @@ hogy legyen hova migrálni és seedelni.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Projekt forrásfa-váz létrehozása (AC: #5)**
-  - [ ] Hozd létre az alábbi könyvtárakat a repo gyökeréből: `src/config`, `src/db`, `src/geocoding`, `src/repositories`, `src/services`, `src/routes`, `src/middleware`.
-  - [ ] Hozd létre a `migrations/`, `test/unit/`, `test/integration/` könyvtárakat is (ezek szintén szerepelnek a Structural Seed-ben; tartalmukat a 1.2, 2.1, 2.4 story-k töltik fel — itt csak a váz jön létre).
-  - [ ] Mivel git nem követ üres könyvtárakat, tegyél egy üres `.gitkeep` fájlt minden fenti könyvtárba, hogy azok committolhatók legyenek üresen.
-  - [ ] **NE** hozz létre `src/app.ts`-t, `src/server.ts`-t, `src/seed.ts`-t, `src/config/env.ts`-t vagy `src/db/pool.ts`-t ebben a story-ban — ezek tartalmát a 1.4 (seed.ts, env.ts, pool.ts) és a 2.2 (app.ts, server.ts) story hozza létre. Az AC #5 kizárólag a 7 réteg-könyvtárat követeli meg, nem ezeket a fájlokat; placeholder stub fájlok létrehozása felesleges duplikációs/felülírási kockázatot jelentene a későbbi story-kban (AD-10 — ne over-engineeringelj).
-  - [ ] **NE** hozz létre semmilyen migrációs fájlt a `migrations/`-ben — az a 1.2 story feladata.
+- [x] **Task 1 — Projekt forrásfa-váz létrehozása (AC: #5)**
+  - [x] Hozd létre az alábbi könyvtárakat a repo gyökeréből: `src/config`, `src/db`, `src/geocoding`, `src/repositories`, `src/services`, `src/routes`, `src/middleware`.
+  - [x] Hozd létre a `migrations/`, `test/unit/`, `test/integration/` könyvtárakat is (ezek szintén szerepelnek a Structural Seed-ben; tartalmukat a 1.2, 2.1, 2.4 story-k töltik fel — itt csak a váz jön létre).
+  - [x] Mivel git nem követ üres könyvtárakat, tegyél egy üres `.gitkeep` fájlt minden fenti könyvtárba, hogy azok committolhatók legyenek üresen.
+  - [x] **NE** hozz létre `src/app.ts`-t, `src/server.ts`-t, `src/seed.ts`-t, `src/config/env.ts`-t vagy `src/db/pool.ts`-t ebben a story-ban — ezek tartalmát a 1.4 (seed.ts, env.ts, pool.ts) és a 2.2 (app.ts, server.ts) story hozza létre. Az AC #5 kizárólag a 7 réteg-könyvtárat követeli meg, nem ezeket a fájlokat; placeholder stub fájlok létrehozása felesleges duplikációs/felülírási kockázatot jelentene a későbbi story-kban (AD-10 — ne over-engineeringelj).
+  - [x] **NE** hozz létre semmilyen migrációs fájlt a `migrations/`-ben — az a 1.2 story feladata.
 
 - [ ] **Task 2 — Node/TypeScript projekt inicializálása pontos `typescript` pinneléssel (AC: #3, #4)**
   - [ ] `npm init -y` a repo gyökerében, majd szerkeszd a generált `package.json`-t: `"name": "customer-distance-api"`, `"private": true`, `"type": "module"` (ld. Dev Notes — ESM döntés), `"engines": { "node": ">=24" }`.
