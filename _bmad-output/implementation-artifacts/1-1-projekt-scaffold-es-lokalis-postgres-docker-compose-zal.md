@@ -54,10 +54,10 @@ hogy legyen hova migrálni és seedelni.
 
   **Végrehajtás közben felmerült, nem-blokkoló környezeti ütközés:** a fejlesztői gépen már fut egy másik, ehhez a projekthez nem tartozó Postgres konténer (`smartbasket-pg`, postgres:17) az 5432-es host-porton. Ez nem AC-, sem architektúra-szintű probléma, csak lokális port-ütközés — a fix a host port 5433-ra állítása a `docker-compose.yml`-ben és az `.env.example`-ben (a konténeren belüli port marad 5432, csak a host-oldali mapping változott). Lásd a lenti pontos fájltartalmakat és Dev Notes.
 
-- [ ] **Task 4 — `.env.example` és `.gitignore` javítás (AC: #6, #7)**
-  - [ ] Hozd létre a `.env.example`-t a repo gyökerében a Dev Notes-ban megadott pontos tartalommal (`DATABASE_URL`, `TEST_DATABASE_URL`, `PORT`, a Docker Compose dev-credential-jeivel megegyező, nem-titkos alapértékekkel).
-  - [ ] **Fontos, nem nyilvánvaló hiba-forrás:** a jelenlegi `.gitignore` `.env.*` mintája a `.env.example`-t is kizárná a git-ből. Egészítsd ki a `.gitignore`-t egy `!.env.example` negációs sorral közvetlenül a `.env.*` sor után, majd `git status`/`git add -n .env.example`-lel ellenőrizd, hogy a fájl valóban trackelhető.
-  - [ ] Egészítsd ki a `.gitignore`-t a build/teszt-output bejegyzésekkel is: `dist/` (a `tsconfig.json` `outDir`-ja) és `coverage/` (jövőbeli teszt-coverage kimenet).
+- [x] **Task 4 — `.env.example` és `.gitignore` javítás (AC: #6, #7)**
+  - [x] Hozd létre a `.env.example`-t a repo gyökerében a Dev Notes-ban megadott pontos tartalommal (`DATABASE_URL`, `TEST_DATABASE_URL`, `PORT`, a Docker Compose dev-credential-jeivel megegyező, nem-titkos alapértékekkel).
+  - [x] **Fontos, nem nyilvánvaló hiba-forrás:** a jelenlegi `.gitignore` `.env.*` mintája a `.env.example`-t is kizárná a git-ből. Egészítsd ki a `.gitignore`-t egy `!.env.example` negációs sorral közvetlenül a `.env.*` sor után, majd `git status`/`git add -n .env.example`-lel ellenőrizd, hogy a fájl valóban trackelhető.
+  - [x] Egészítsd ki a `.gitignore`-t a build/teszt-output bejegyzésekkel is: `dist/` (a `tsconfig.json` `outDir`-ja) és `coverage/` (jövőbeli teszt-coverage kimenet).
 
 - [ ] **Task 5 — Végigfutási ellenőrzés és delivery (AC: #1–#7)**
   - [ ] Futtasd végig egy tiszta állapotból: `docker compose up -d` → mindkét DB létezik → `rm -rf node_modules && npm ci` → hibamentes → `package.json` typescript mező pontosan `6.0.2` → mind a 7 `src/` réteg-könyvtár létezik → `.env.example` létezik és git által trackelt (nem ignorált).

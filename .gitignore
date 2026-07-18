@@ -4,9 +4,16 @@ node_modules/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # macOS
 .DS_Store
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Build output
+dist/
+
+# Test coverage output
+coverage/
