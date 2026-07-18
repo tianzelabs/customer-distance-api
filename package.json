@@ -1,0 +1,18 @@
+{
+  "name": "customer-distance-api",
+  "version": "1.0.0",
+  "description": "Ez a házi feladat ugyanazon PostgreSQL REST API feladaton keresztül hasonlítja össze a Superpowers és a BMAD-METHOD módszertant.",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "6.0.2"
+  }
+}

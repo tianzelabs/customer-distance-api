@@ -33,15 +33,17 @@ hogy legyen hova migrálni és seedelni.
   - [x] **NE** hozz létre `src/app.ts`-t, `src/server.ts`-t, `src/seed.ts`-t, `src/config/env.ts`-t vagy `src/db/pool.ts`-t ebben a story-ban — ezek tartalmát a 1.4 (seed.ts, env.ts, pool.ts) és a 2.2 (app.ts, server.ts) story hozza létre. Az AC #5 kizárólag a 7 réteg-könyvtárat követeli meg, nem ezeket a fájlokat; placeholder stub fájlok létrehozása felesleges duplikációs/felülírási kockázatot jelentene a későbbi story-kban (AD-10 — ne over-engineeringelj).
   - [x] **NE** hozz létre semmilyen migrációs fájlt a `migrations/`-ben — az a 1.2 story feladata.
 
-- [ ] **Task 2 — Node/TypeScript projekt inicializálása pontos `typescript` pinneléssel (AC: #3, #4)**
-  - [ ] `npm init -y` a repo gyökerében, majd szerkeszd a generált `package.json`-t: `"name": "customer-distance-api"`, `"private": true`, `"type": "module"` (ld. Dev Notes — ESM döntés), `"engines": { "node": ">=24" }`.
-  - [ ] `npm install --save-dev --save-exact typescript@6.0.2` — a `--save-exact` biztosítja, hogy a `package.json`-ban `"typescript": "6.0.2"` szerepeljen `^`/`~` nélkül. Ellenőrizd a `package.json`-t utána: a `typescript` bejegyzésnek pontosan `"6.0.2"`-nek kell lennie.
-  - [ ] `npm install --save-dev @types/node@24` (a Node 24 típusdefiníciói; nem igényel pontos pinnelést, csak a `typescript`/`node-pg-migrate` igényel az Architecture Spine Stack táblája szerint).
-  - [ ] Hozz létre egy `tsconfig.json`-t a repo gyökerében (lásd Dev Notes — pontos tartalom).
-  - [ ] Adj hozzá egy minimális `"scripts": { "build": "tsc" }` bejegyzést a `package.json`-hoz. Ne adj hozzá más npm scriptet (pl. `dev`, `test`, `migrate`, `seed`) — ezek pontos elnevezése az Architecture Spine szerint deferred, a döntést az adott funkciót bevezető story hozza (1.2, 1.4, 2.x).
-  - [ ] Committold a `package-lock.json`-t.
-  - [ ] Ellenőrizd a reprodukálhatóságot: `rm -rf node_modules && npm ci` — hibamentesen kell lefutnia, és a `node_modules/typescript/package.json`-ban a verziónak `6.0.2`-nek kell lennie.
-  - [ ] Megjegyzés: mivel ez a story még nem hoz létre egyetlen `.ts` forrásfájlt sem a `src/`-ben, az `npm run build` ebben a fázisban "No inputs were found" hibát fog jelezni — ez ELVÁRT és nem hiba; ne próbáld ezt üres/placeholder `.ts` fájlok hozzáadásával elkerülni (ld. Task 1 tiltása).
+- [x] **Task 2 — Node/TypeScript projekt inicializálása pontos `typescript` pinneléssel (AC: #3, #4)**
+  - [x] `npm init -y` a repo gyökerében, majd szerkeszd a generált `package.json`-t: `"name": "customer-distance-api"`, `"private": true`, `"type": "module"` (ld. Dev Notes — ESM döntés), `"engines": { "node": ">=24" }`.
+  - [x] `npm install --save-dev --save-exact typescript@6.0.2` — a `--save-exact` biztosítja, hogy a `package.json`-ban `"typescript": "6.0.2"` szerepeljen `^`/`~` nélkül. Ellenőrizd a `package.json`-t utána: a `typescript` bejegyzésnek pontosan `"6.0.2"`-nek kell lennie.
+  - [x] `npm install --save-dev @types/node@24` (a Node 24 típusdefiníciói; nem igényel pontos pinnelést, csak a `typescript`/`node-pg-migrate` igényel az Architecture Spine Stack táblája szerint).
+  - [x] Hozz létre egy `tsconfig.json`-t a repo gyökerében (lásd Dev Notes — pontos tartalom).
+  - [x] Adj hozzá egy minimális `"scripts": { "build": "tsc" }` bejegyzést a `package.json`-hoz. Ne adj hozzá más npm scriptet (pl. `dev`, `test`, `migrate`, `seed`) — ezek pontos elnevezése az Architecture Spine szerint deferred, a döntést az adott funkciót bevezető story hozza (1.2, 1.4, 2.x).
+  - [x] Committold a `package-lock.json`-t.
+  - [x] Ellenőrizd a reprodukálhatóságot: `rm -rf node_modules && npm ci` — hibamentesen kell lefutnia, és a `node_modules/typescript/package.json`-ban a verziónak `6.0.2`-nek kell lennie.
+  - [x] Megjegyzés: mivel ez a story még nem hoz létre egyetlen `.ts` forrásfájlt sem a `src/`-ben, az `npm run build` ebben a fázisban "No inputs were found" hibát fog jelezni — ez ELVÁRT és nem hiba; ne próbáld ezt üres/placeholder `.ts` fájlok hozzáadásával elkerülni (ld. Task 1 tiltása).
+
+  **Megjegyzés a helyi környezetről:** a fejlesztői gépen Node v23.5.0 fut (nem 24) — az `npm install` ezért `EBADENGINE` warningot ad, ami elvárt és nem hiba (a `package.json` `engines` mezője dokumentációs célú megkötés, nem blokkol telepítést). A CI/deployment környezetnek Node 24-et kell használnia.
 
 - [ ] **Task 3 — Docker Compose: `postgres:18`, két logikai adatbázissal (AC: #1, #2)**
   - [ ] Hozd létre a `docker-compose.yml`-t a repo gyökerében a Dev Notes-ban megadott pontos tartalommal.
