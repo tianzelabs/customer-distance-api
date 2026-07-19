@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCountResult } from '../../src/repositories/customersRepository.js';
+import { countCustomers, parseCountResult, type Queryable } from '../../src/repositories/customersRepository.js';
 
 /**
  * `parseCountResult()` is the pure, DB-independent slice of
@@ -33,5 +33,43 @@ describe('parseCountResult (unit)', () => {
 
   it('throws for a non-integer numeric string', () => {
     expect(() => parseCountResult('1.5')).toThrow(/not a safe, finite integer/);
+  });
+
+  it('throws for a negative numeric string (COUNT(*) can never be negative)', () => {
+    expect(() => parseCountResult('-1')).toThrow(/not a safe, finite integer/);
+  });
+
+  it('throws for an empty or whitespace-only string, rather than silently coercing to 0', () => {
+    expect(() => parseCountResult('')).toThrow(/not a safe, finite integer/);
+    expect(() => parseCountResult('   ')).toThrow(/not a safe, finite integer/);
+  });
+
+  it('throws for hex or scientific-notation strings, which Number() alone would accept', () => {
+    expect(() => parseCountResult('0x10')).toThrow(/not a safe, finite integer/);
+    expect(() => parseCountResult('1e2')).toThrow(/not a safe, finite integer/);
+  });
+});
+
+/**
+ * `countCustomers()`'s own logic beyond `parseCountResult()`: dereferencing
+ * `result.rows[0]`. `SELECT COUNT(*)` always returns exactly one row in
+ * practice, so this branch needs a fake `Queryable` to exercise — a live
+ * Postgres would never naturally produce a zero-row COUNT(*) result.
+ */
+describe('countCustomers (unit, fake Queryable)', () => {
+  it('throws a clear error instead of an unguarded TypeError when the query returns no rows', async () => {
+    const emptyResultDb: Queryable = {
+      query: async () => ({ rows: [] }) as never,
+    } as unknown as Queryable;
+
+    await expect(countCustomers(emptyResultDb)).rejects.toThrow(/COUNT\(\*\) returned no rows/);
+  });
+
+  it('delegates to parseCountResult and returns its coerced value', async () => {
+    const fakeDb: Queryable = {
+      query: async () => ({ rows: [{ count: '42' }] }) as never,
+    } as unknown as Queryable;
+
+    await expect(countCustomers(fakeDb)).resolves.toBe(42);
   });
 });

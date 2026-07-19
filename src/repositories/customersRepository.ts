@@ -83,6 +83,16 @@ export async function upsertCustomer(db: Queryable, input: UpsertCustomerInput):
  * is unit-testable without a live Postgres connection.
  */
 export function parseCountResult(raw: string): number {
+  // Require a plain, non-negative decimal digit string before even
+  // attempting Number() conversion. Number()'s own coercion is too
+  // lenient for validating an untrusted-shaped string: it accepts ""/
+  // whitespace-only as 0, hex ("0x10"), and scientific notation ("1e2")
+  // as valid numbers, and Number.isSafeInteger() alone does not reject
+  // negative values — none of which COUNT(*) can ever legitimately
+  // return.
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`[database] COUNT(*) returned a value that is not a safe, finite integer: "${raw}"`);
+  }
   const value = Number(raw);
   if (!Number.isFinite(value) || !Number.isSafeInteger(value)) {
     throw new Error(`[database] COUNT(*) returned a value that is not a safe, finite integer: "${raw}"`);
@@ -98,5 +108,9 @@ export function parseCountResult(raw: string): number {
  */
 export async function countCustomers(db: Queryable): Promise<number> {
   const result = await db.query<{ count: string }>('SELECT COUNT(*) FROM customers');
-  return parseCountResult(result.rows[0].count);
+  const row = result.rows[0];
+  if (row === undefined) {
+    throw new Error('[database] COUNT(*) returned no rows');
+  }
+  return parseCountResult(row.count);
 }

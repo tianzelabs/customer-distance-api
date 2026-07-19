@@ -13,6 +13,12 @@ import { defineConfig } from 'vitest/config';
  * changing any individual test's own TRUNCATE-per-test strategy. The
  * suite is small (well under 100 tests as of Story 2.3), so the
  * performance cost of sequential file execution is negligible.
+ *
+ * Note: this only serializes ACROSS files, not within one — Vitest's
+ * default is already non-concurrent within a file (no test in this repo
+ * uses `it.concurrent`), so this setting alone is sufficient today, but
+ * a future `it.concurrent` block sharing the customers table would
+ * reopen the same race this config closes.
  */
 export default defineConfig({
   test: {

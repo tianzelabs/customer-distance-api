@@ -7,7 +7,7 @@ paradigm: 'light layered architecture'
 scope: 'Customer Distance API backend service (FR-1–FR-14, prd.md)'
 status: final
 created: '2026-07-18'
-updated: '2026-07-18'
+updated: '2026-07-19'
 binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14]
 sources:
   - '_bmad-output/planning-artifacts/prds/prd-customer-distance-api-2026-07-17/prd.md'
@@ -145,7 +145,7 @@ graph LR
 | Express | 5 (5.2.1, Active support phase) |
 | pg (node-postgres) | 8.22.0, used via `Pool` — no ORM/query-builder |
 | node-pg-migrate | 8.0.4, exact pin (no `^`/`~`, same install convention as TypeScript) — Postgres-native, versioned up/down migrations, no ORM coupling. The `9.0.0-alpha` pre-release line exists and must NOT be used |
-| Vitest | 4.1.x (4.1.10 current stable; the 5.0 line is a beta and explicitly not used) |
+| Vitest | 4.1.x (4.1.10 current stable; the 5.0 line is a beta and explicitly not used). Test files run with `fileParallelism: false` (`vitest.config.ts`, added Story 2.3) — integration test files share one real `TEST_DATABASE_URL` table and each truncates it per-test, so files must not run in parallel workers. |
 | PostgreSQL | 18 (18.4), official Docker image `postgres:18`, run via Docker Compose |
 
 ## Structural Seed

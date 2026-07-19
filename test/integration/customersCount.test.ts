@@ -1,5 +1,4 @@
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
 import express from 'express';
 import type { Pool } from 'pg';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -7,6 +6,7 @@ import { requireTestDatabaseUrl } from '../../src/config/env.js';
 import { createPool } from '../../src/db/pool.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
 import { createCustomersRouter } from '../../src/routes/customersRoutes.js';
+import { closeServer, listenOnEphemeralPort } from '../helpers/httpServer.js';
 
 /**
  * Proves FR-6 end-to-end against a REAL, non-mocked Postgres, over real
@@ -37,19 +37,12 @@ describe('GET /customers/count (integration, real Postgres via TEST_DATABASE_URL
     testApp.use('/customers', createCustomersRouter(pool));
     testApp.use(errorHandler);
 
-    server = createServer(testApp);
-    await new Promise<void>((resolve) => {
-      server.listen(0, resolve);
-    });
-    const { port } = server.address() as AddressInfo;
-    baseUrl = `http://127.0.0.1:${port}`;
+    ({ server, baseUrl } = await listenOnEphemeralPort(testApp));
   });
 
   afterAll(async () => {
     await pool.end();
-    await new Promise<void>((resolve, reject) => {
-      server.close((err) => (err ? reject(err) : resolve()));
-    });
+    await closeServer(server);
   });
 
   beforeEach(async () => {

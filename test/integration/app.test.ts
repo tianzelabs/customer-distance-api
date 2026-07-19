@@ -1,18 +1,9 @@
-import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import type { Server } from 'node:http';
 import express from 'express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../../src/app.js';
 import { errorHandler } from '../../src/middleware/errorHandler.js';
-
-async function listenOnEphemeralPort(handler: express.Express): Promise<{ server: Server; baseUrl: string }> {
-  const server = createServer(handler);
-  await new Promise<void>((resolve) => {
-    server.listen(0, resolve);
-  });
-  const { port } = server.address() as AddressInfo;
-  return { server, baseUrl: `http://127.0.0.1:${port}` };
-}
+import { closeServer, listenOnEphemeralPort } from '../helpers/httpServer.js';
 
 /**
  * Proves AD-4 end-to-end: the real `app` (src/app.ts) is imported directly
@@ -30,9 +21,7 @@ describe('app (integration)', () => {
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => {
-      server.close((err) => (err ? reject(err) : resolve()));
-    });
+    await closeServer(server);
   });
 
   it('returns Express 5 default 404 for an undefined route (no custom 404 handler — AD-8 does not require one)', async () => {
@@ -78,9 +67,7 @@ describe('centralized error handling (integration, synthetic app)', () => {
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => {
-      server.close((err) => (err ? reject(err) : resolve()));
-    });
+    await closeServer(server);
   });
 
   it('routes a synchronous route throw through the centralized error handler end-to-end', async () => {
