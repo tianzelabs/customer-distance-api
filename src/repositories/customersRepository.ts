@@ -17,9 +17,9 @@ export interface Customer {
   telepules: string;
   lat: number | null;
   lon: number | null;
-  budget?: number;
-  note?: string;
-  countryCode?: string;
+  budget?: number | null;
+  note?: string | null;
+  countryCode?: string | null;
 }
 
 /** Fields needed to upsert a customer row (no `id` — assigned by the DB). */

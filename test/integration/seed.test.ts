@@ -6,12 +6,14 @@ import { createPool } from '../../src/db/pool.js';
 import { BUDAPEST_REF } from '../../src/geocoding/townReference.js';
 import { seedCustomers, type SeedRecord } from '../../src/seed.js';
 
-// This suite runs against TEST_DATABASE_URL (customer_distance_test)
-// ONLY — requireTestDatabaseUrl() fail-stops if it's unset and never
-// falls back to DATABASE_URL (AD-9). It never touches the dev DB: the
-// Pool below is built via db/pool.ts's createPool() factory, the same
-// single construction site AD-3 mandates, just pointed at a different
-// connection string than the shared `pool` singleton.
+// This suite queries only TEST_DATABASE_URL (customer_distance_test) —
+// requireTestDatabaseUrl() fail-stops if it's unset, invalid, or equal to
+// DATABASE_URL, and never falls back to DATABASE_URL (AD-9). Note: importing
+// db/pool.ts (for its createPool() factory) also requires DATABASE_URL to be
+// set and valid, since config/env.ts validates it at module load — so this
+// suite still needs BOTH URLs present in the environment, matching how this
+// project is actually run (docker-compose.yml provisions both databases on
+// one Postgres instance, and .env.example documents both together).
 
 describe('seed integration (TEST_DATABASE_URL, customer_distance_test)', () => {
   let pool: Pool;
@@ -58,6 +60,42 @@ describe('seed integration (TEST_DATABASE_URL, customer_distance_test)', () => {
     expect(niamh.rows[0].telepules).toBe('Dublin');
     expect(niamh.rows[0].lat).not.toBeNull();
     expect(niamh.rows[0].lon).not.toBeNull();
+  });
+
+  it('DO UPDATE actually refreshes an existing row\'s columns on re-seed with changed data (AD-5)', async () => {
+    const original: SeedRecord[] = [
+      {
+        name: 'Update Test Customer',
+        budget: 100,
+        location: { city: 'Vienna', countryCode: 'AT' },
+        note: 'original note',
+      },
+    ];
+    await seedCustomers(pool, original);
+
+    const changed: SeedRecord[] = [
+      {
+        name: 'Update Test Customer',
+        budget: 999,
+        location: { city: 'Vienna', countryCode: 'AT' },
+        note: 'updated note',
+      },
+    ];
+    await seedCustomers(pool, changed);
+
+    const rows = (
+      await pool.query<{ budget: number; note: string }>(
+        'SELECT budget, note FROM customers WHERE name = $1',
+        ['Update Test Customer'],
+      )
+    ).rows;
+
+    // Still exactly one row (upsert, not a second insert)...
+    expect(rows).toHaveLength(1);
+    // ...and its mutable columns reflect the SECOND run's values, proving
+    // ON CONFLICT DO UPDATE actually updates rather than being a no-op.
+    expect(rows[0].budget).toBe(999);
+    expect(rows[0].note).toBe('updated note');
   });
 
   it('sets lat/lon to null for a dedicated unknown-town fixture and keeps processing subsequent records (FR-5, FR-10)', async () => {

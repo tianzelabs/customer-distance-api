@@ -4,7 +4,7 @@ baseline_commit: 661945304e489f3803686fa1a3c2f9ba11d4896f
 
 # Story 1.4: Idempotens seed script
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -16,7 +16,7 @@ hogy reprodukálható induló adatom legyen.
 
 ## Acceptance Criteria
 
-1. **Given** ez a story hozza létre a `src/config/env.ts`-t (minimálisan `DATABASE_URL`-t olvasva és validálva, fail-fast hibaüzenettel hiányzó/érvénytelen érték esetén) és a `src/db/pool.ts`-t (az egyetlen megosztott `pg` `Pool` modul, ami az `env.ts`-ből olvassa a kapcsolatot) — ezeket a 2.2 story bővíti tovább (`TEST_DATABASE_URL` fail-stop haszálata, `PORT`), nem hozza létre újra. [Source: epics.md#Story 1.4; ARCHITECTURE-SPINE.md#AD-9]
+1. **Given** ez a story hozza létre a `src/config/env.ts`-t (`DATABASE_URL`-t olvasva és validálva, fail-fast hibaüzenettel hiányzó/érvénytelen érték esetén, `PORT` opcionális parse-olással, és a `requireTestDatabaseUrl()` fail-stop segédfüggvénnyel — ez utóbbi kettő ténylegesen már ebben a story-ban készül el, mert az integrációs teszt AC #8-nak szüksége van rá; a "2.2 bővíti" korábbi megfogalmazás pontatlan volt, javítva code review után) és a `src/db/pool.ts`-t (az egyetlen megosztott `pg` `Pool` modul, ami az `env.ts`-ből olvassa a kapcsolatot). [Source: epics.md#Story 1.4; ARCHITECTURE-SPINE.md#AD-9]
 2. **Given** egy futó, migrált Postgres és a `seed-customers.json` forrásfájl, **when** a fejlesztő lefuttatja a seed scriptet (`src/seed.ts`, a megosztott `src/db/pool.ts` Pool-on keresztül), **then** mind a 15 ügyfél bekerül a `customers` táblába, `normalizeTown()`+`townReference.ts` alapján geokódolva. [Source: epics.md#Story 1.4; prd.md#FR-2, FR-3]
 3. Minden beszúrás/upsert paraméterezett lekérdezésen keresztül történik (nincs string-konkatenáció) — konkrét bizonyíték: a `Niamh O'Brien` név (aposztróffal) hibamentesen és helyesen kerül be. [Source: epics.md#Story 1.4; addendum.md; ARCHITECTURE-SPINE.md#AD-2]
 4. **When** a seed scriptet másodszor is lefuttatják, **then** a `customers` táblában nem keletkezik duplikátum (upsert `ON CONFLICT (name, telepules) DO UPDATE`, sosem `DO NOTHING`). [Source: epics.md#Story 1.4; prd.md#FR-2; ARCHITECTURE-SPINE.md#AD-5]
@@ -158,3 +158,28 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 - 2026-07-19: Story created (`bmad-create-story` workflow), Status `ready-for-dev`.
 - 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode) — Tasks 1–8 completed. `env.ts`/`pool.ts`/`customersRepository.ts`/`seed.ts` implemented; 38 unit + 2 integration tests written and run for real (40/40 passing); real dev-DB seed run twice, verified 15 rows via psql, apostrophe/Budapest spot-checks passed. Status `in-progress` → `review`.
+- 2026-07-19: Code review (Blind Hunter, Edge Case Hunter, Acceptance Auditor) — 11 patches applied (incl. a credential-leak fix, a dev-DB-truncation safety guard, and a real DO-UPDATE-refreshes-data test), 1 doc-only AC #1 correction, 6 dismissed with reasoning. 41/41 tests passing after fixes; dev DB re-verified intact (15 rows). Status `done`.
+
+### Review Findings
+
+- [x] [Review][Patch] `validatePostgresUrl`'s malformed-URL error interpolated the raw connection string (which may contain a password) into a message that gets logged [src/config/env.ts] — fixed: error messages no longer echo the raw value.
+- [x] [Review][Patch] No check that `TEST_DATABASE_URL` differs from `DATABASE_URL` — if ever misconfigured identically, the integration suite's `beforeEach` `TRUNCATE` would silently hit the dev DB [src/config/env.ts] — fixed: `requireTestDatabaseUrl()` now throws if they're equal.
+- [x] [Review][Patch] `validatePostgresUrl` didn't check for an empty host, only protocol — fixed: added a hostname-presence check.
+- [x] [Review][Patch] `parsePort` used `Number()`, silently accepting non-decimal numeric forms (`"1e2"`, `"0x1f"`) as valid ports — fixed: added a plain-decimal regex pre-check.
+- [x] [Review][Patch] `env.testDatabaseUrl` was exposed on the public `Env` object, unvalidated, alongside the fail-stop `requireTestDatabaseUrl()` — a caller could bypass the invariant by reading the field directly [src/config/env.ts] — fixed: removed from `Env`; `requireTestDatabaseUrl()` remains the only sanctioned accessor (it already read `process.env` directly, so nothing else depended on the removed field).
+- [x] [Review][Patch] `Customer` type declared `budget?: number`/`note?: string`/`countryCode?: string` (optional-but-never-null) while the DB columns are genuinely nullable — a future row-to-domain mapping (Story 2.3/2.4) would assign `null` at runtime against a type that forbids it [src/repositories/customersRepository.ts] — fixed: `| null` added to all three.
+- [x] [Review][Patch] `seed.ts`'s `main()` skipped `pool.end()` on the error path (only ran after a successful `seedCustomers()`), leaking connections on a failed seed run — fixed: wrapped in `try/finally`.
+- [x] [Review][Patch] No test proved `ON CONFLICT ... DO UPDATE` actually refreshes an existing row's columns — the idempotency test only re-ran with *identical* data and checked the count stayed at 15, never exercising the "re-seed with edited data updates the row" behavior the doc comment cites as the reason `DO UPDATE` was chosen over `DO NOTHING` [test/integration/seed.test.ts] — fixed: added a dedicated test that reseeds with changed `budget`/`note` and asserts the single surviving row reflects the new values.
+- [x] [Review][Patch] No reproducible way to migrate `customer_distance_test` — `migrate:up` only targets `DATABASE_URL` (the dev DB); the test DB had only been migrated via a manual one-off step this session [package.json] — fixed: added `"migrate:test:up": "DATABASE_URL=$TEST_DATABASE_URL node-pg-migrate up"`, verified idempotent (`"No migrations to run!"` on second invocation).
+- [x] [Review][Patch] `test/integration/seed.test.ts`'s header comment overclaimed the suite "never touches the dev DB" / runs "ONLY" against `TEST_DATABASE_URL`, when importing `db/pool.ts` (for its `createPool` factory) also requires `DATABASE_URL` to be present and valid, since `config/env.ts` validates it at module load — fixed: comment reworded to state this accurately (both URLs are required together in this project's actual usage pattern — one Docker Compose Postgres instance provisioning both databases — so the omission has no real-world consequence here, but the claim was still wrong).
+- [x] [Review][Patch] AC #1's text said `env.ts`/`pool.ts` are built "minimally" with `TEST_DATABASE_URL`/`PORT` deferred to Story 2.2 — but Task 1 and AC #8 (in the same story) required `requireTestDatabaseUrl()` and `PORT` parsing to exist now, and the delivered code correctly does so — fixed: reworded AC #1 to describe what was actually (and necessarily) built, rather than leaving a stale, self-contradicting claim in the story record.
+
+**Dismissed (6, with reasoning):**
+- No transaction wrapping `seedCustomers()`'s per-record upserts — the idempotent upsert design makes a partial-run failure safely recoverable by simply re-running the seed; wrapping 15 sequential upserts in a transaction adds complexity with no corresponding FR requirement (AD-10 anti-over-engineering).
+- No `country_code` shape/length validation before the DB constraint catches it — consistent with the same finding already dismissed in Story 1.2's review: not in the ratified migration DDL, and the real seed data always has valid 2-char codes.
+- No runtime schema validation on parsed `seed-customers.json` (zod or similar) — the file is a fixed, version-controlled, human-verified input, not external/user data; adding a validation dependency for this is out of the scope any FR specifies.
+- `npm test` running unit+integration together isn't a "real behavioral split" versus the new `test:unit`/`test:integration` scripts — those scripts exist precisely to allow a selective run when wanted; `npm test` running everything is the FR-11-mandated default, not a gap.
+- No per-record try/catch fault isolation in the seed loop (one bad record would currently abort the rest) — FR-5's "continue past a bad record" guarantee is specifically scoped to unknown *towns* (already correctly handled via `resolveCoordinates`'s never-throw contract), not to arbitrary malformed record shapes; extending it further is undocumented scope expansion.
+- `dotenv`'s `config()` return value (a possible read/parse error) isn't checked — genuinely low-value: the common case (no `.env` file, using exported shell vars) reports the same "not found" result as a real error would, and deferring this is a reasonable simplification at this scale.
+
+**Note (not a finding, procedural):** one reviewing subagent (Blind Hunter) reported that tool output it received appeared to contain formatting resembling injected system-reminder-style text. Given this exact harness legitimately emits comparable reminders during normal skill invocations elsewhere in this session, this most likely reflects normal harness behavior the subagent (running with no prior session context) wasn't positioned to recognize — not a real injection. Noted for completeness; no action taken.

@@ -76,12 +76,16 @@ export async function seedCustomers(db: Pool | PoolClient, records: SeedRecord[]
 
 async function main(): Promise<void> {
   const { pool } = await import('./db/pool.js');
-  const seedPath = new URL('../seed-customers.json', import.meta.url);
-  const raw = await readFile(seedPath, 'utf-8');
-  const records: SeedRecord[] = JSON.parse(raw);
-  const count = await seedCustomers(pool, records);
-  console.log(`[seed] Upserted ${count} customer(s) into "customers".`);
-  await pool.end();
+  try {
+    const seedPath = new URL('../seed-customers.json', import.meta.url);
+    const raw = await readFile(seedPath, 'utf-8');
+    const records: SeedRecord[] = JSON.parse(raw);
+    const count = await seedCustomers(pool, records);
+    console.log(`[seed] Upserted ${count} customer(s) into "customers".`);
+  } finally {
+    // Always release the pool's connections, including on a failed run.
+    await pool.end();
+  }
 }
 
 const isMainModule =
