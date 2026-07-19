@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { assembleCustomersWithDistance, getCustomerCount } from '../../src/services/customersService.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  assembleCustomersWithDistance,
+  getCustomerCount,
+  roundToOneDecimal,
+} from '../../src/services/customersService.js';
 import { BUDAPEST_REF } from '../../src/geocoding/townReference.js';
 import type { Customer, Queryable } from '../../src/repositories/customersRepository.js';
 
@@ -113,25 +117,28 @@ describe('assembleCustomersWithDistance (unit)', () => {
     ]);
   });
 
-  it('rounds to 1 decimal without the naive Math.round(x*10)/10 footgun', () => {
+  it('rounds to 1 decimal without the naive Math.round(x*10)/10 footgun (calls the real, exported roundToOneDecimal)', () => {
     // Regression guard for the classic float-representation rounding bug.
     // A value intended to be exactly 2.45 (which should round to 2.5)
     // can arrive as 2.4499999999999997 after upstream floating-point
     // arithmetic — verified directly here: `2.4 + 0.05` (not a literal
     // "2.45") produces exactly that value in IEEE-754 double precision.
-    // Naive Math.round(value * 10) / 10 misrounds it DOWN to 2.4; the
-    // EPSILON-adjusted approach the service actually uses correctly
-    // rounds it to 2.5. The service's rounding helper itself is private,
-    // so this test proves the underlying arithmetic fact directly: the
-    // naive approach IS broken for this value, and the fix is not.
     const nearBoundary = 2.4 + 0.05;
     expect(nearBoundary).toBe(2.4499999999999997); // confirms the float-error premise
 
     const naiveRounding = Math.round(nearBoundary * 10) / 10;
     expect(naiveRounding).toBe(2.4); // proves the footgun is real in plain JS
 
-    const correctRounding = Math.round((nearBoundary + Number.EPSILON) * 10) / 10;
-    expect(correctRounding).toBe(2.5); // proves the EPSILON fix used by the service
+    // Calls the actual shipped function (not a reimplementation of the
+    // formula) — a future edit that silently reverted it to the naive
+    // form would fail this assertion.
+    expect(roundToOneDecimal(nearBoundary)).toBe(2.5);
+  });
+
+  it('roundToOneDecimal behaves correctly at ordinary, non-boundary magnitudes too', () => {
+    expect(roundToOneDecimal(214.044)).toBe(214);
+    expect(roundToOneDecimal(2469.44)).toBe(2469.4);
+    expect(roundToOneDecimal(0)).toBe(0);
   });
 
   it('does not mutate the input array', () => {
@@ -169,5 +176,81 @@ describe('assembleCustomersWithDistance (unit)', () => {
     expect(withOptional.budget).toBe(1000);
     expect(withOptional.note).toBe('a note');
     expect(withOptional.countryCode).toBe('AT');
+  });
+
+  it('keeps a falsy-but-present budget/note (0, "") rather than treating them as omitted — proves the strict !== null check, not a truthiness check', () => {
+    const result = assembleCustomersWithDistance([
+      customer({ id: 1, name: 'Zero Budget', lat: 48.2082, lon: 16.3738, budget: 0, note: '' }),
+    ]);
+
+    expect('budget' in result[0]).toBe(true);
+    expect(result[0].budget).toBe(0);
+    expect('note' in result[0]).toBe(true);
+    expect(result[0].note).toBe('');
+  });
+
+  it('sorts by name using plain code-unit order, not locale-aware order — demonstrates the documented (surprising) behavior', () => {
+    // Plain `<`/`>` puts all uppercase ASCII before all lowercase ASCII
+    // (code points 65-90 vs 97-122), unlike localeCompare's alphabetical
+    // "aA, bB, ..." collation. Same distanceKm (identical coordinates)
+    // isolates the name comparator from any distance-based ordering.
+    const result = assembleCustomersWithDistance([
+      customer({ id: 1, name: 'apple', lat: 48.2082, lon: 16.3738 }),
+      customer({ id: 2, name: 'Banana', lat: 48.2082, lon: 16.3738 }),
+    ]);
+
+    // Code-unit order: 'B' (66) < 'a' (97), so 'Banana' sorts BEFORE
+    // 'apple' — the opposite of case-insensitive alphabetical order.
+    expect(result.map((c) => c.name)).toEqual(['Banana', 'apple']);
+  });
+
+  it('returns an empty array for an empty input, without throwing', () => {
+    expect(assembleCustomersWithDistance([])).toEqual([]);
+  });
+
+  it('treats a non-finite stored coordinate (NaN/Infinity) as an unknown town (distanceKm null), not a computation error', () => {
+    // Defends against the CHECK constraint's three-valued-logic gap:
+    // 'NaN'::double precision BETWEEN -90 AND 90 evaluates to NULL/
+    // unknown, which Postgres CHECK treats as passing, not rejecting.
+    const result = assembleCustomersWithDistance([
+      customer({ id: 1, name: 'NaN Lat Customer', lat: Number.NaN, lon: 16.3738 }),
+      customer({ id: 2, name: 'Infinity Lon Customer', lat: 48.2082, lon: Number.POSITIVE_INFINITY }),
+    ]);
+
+    expect(result.find((c) => c.id === 1)?.distanceKm).toBeNull();
+    expect(result.find((c) => c.id === 2)?.distanceKm).toBeNull();
+  });
+});
+
+/**
+ * Exercises the "unreachable in practice" defensive throw in
+ * `computeDistanceKm` — real, non-null, finite coordinates always
+ * produce a real `haversineDistanceKm` result, so this branch can only
+ * be forced via a mock of the haversine module, proving the guard
+ * itself actually works if that contract were ever violated.
+ */
+describe('assembleCustomersWithDistance — defensive throw when haversineDistanceKm unexpectedly returns null', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('throws a clear error rather than silently producing a wrong distance', async () => {
+    vi.resetModules();
+    vi.doMock('../../src/services/haversine.js', () => ({
+      haversineDistanceKm: () => null,
+    }));
+
+    const { assembleCustomersWithDistance: assembleWithMockedHaversine } = await import(
+      '../../src/services/customersService.js'
+    );
+
+    expect(() =>
+      assembleWithMockedHaversine([
+        { id: 1, name: 'Any Customer', telepules: 'Vienna', lat: 48.2082, lon: 16.3738 },
+      ]),
+    ).toThrow(/haversineDistanceKm unexpectedly returned null/);
+
+    vi.doUnmock('../../src/services/haversine.js');
+    vi.resetModules();
   });
 });

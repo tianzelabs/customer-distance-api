@@ -48,28 +48,51 @@ export async function getCustomerCount(db: Queryable): Promise<number> {
  * `atan2`/`sqrt` of irrational intermediate results), so this is a
  * standard, cheap defensive idiom here — not a load-bearing precision
  * guarantee for a domain that actually produces exact boundary values.
+ * Note on practical impact: `Number.EPSILON` is calibrated to the gap
+ * near magnitude 1, so for this app's real distance range (0 to
+ * ~2470km observed against the real seed data) the nudge is a no-op for
+ * nearly every value it computes — it only does something for outputs
+ * with magnitude close to 1, which is rare in this domain. Kept anyway:
+ * it's free, and matches the codebase's general "defend even against
+ * unlikely inputs" posture (see `parseCustomerId`/`parseCountResult`).
+ * Exported (not just used internally) so it is unit-testable directly,
+ * same rationale as exporting `parseCountResult`/`parseCustomerId` from
+ * the repository layer.
  */
-function roundToOneDecimal(value: number): number {
+export function roundToOneDecimal(value: number): number {
   return Math.round((value + Number.EPSILON) * 10) / 10;
 }
 
 /**
- * `distanceKm` for one customer: `null` when the town is unknown (the
- * `customers` table's CHECK constraint guarantees `lat`/`lon` are
- * either both null or both non-null, so checking either is sufficient);
- * otherwise the rounded Haversine distance to `BUDAPEST_REF` (the
- * default `to` of `haversineDistanceKm`, AD-13 — not re-specified here).
+ * `distanceKm` for one customer: `null` when the town is unknown OR when
+ * a stored coordinate is non-finite (`NaN`/`Infinity`) — defensive
+ * because the `customers` table's CHECK constraints use three-valued SQL
+ * logic (`'NaN'::double precision BETWEEN -90 AND 90` evaluates to
+ * NULL/unknown, which a CHECK constraint treats as passing, not
+ * rejecting), so a stored `NaN` is not actually excluded by the schema
+ * the way the range CHECKs might suggest. Both `lat` and `lon` are
+ * checked independently even though the CHECK constraint guarantees
+ * they're null-paired, as basic belt-and-suspenders. Otherwise: the
+ * rounded Haversine distance to `BUDAPEST_REF` (the default `to` of
+ * `haversineDistanceKm`, AD-13 — not re-specified here).
  */
 function computeDistanceKm(customer: Customer): number | null {
-  if (customer.lat === null || customer.lon === null) {
+  if (
+    customer.lat === null ||
+    customer.lon === null ||
+    !Number.isFinite(customer.lat) ||
+    !Number.isFinite(customer.lon)
+  ) {
     return null;
   }
   const raw = haversineDistanceKm({ lat: customer.lat, lon: customer.lon });
   if (raw === null) {
-    // Unreachable in practice: `from` is non-null (checked above) and
-    // `to` defaults to BUDAPEST_REF (never null), so haversineDistanceKm
-    // cannot return null here. Thrown instead of silently returning a
-    // wrong value, in case that contract ever changes.
+    // Unreachable in practice: `from` is non-null and finite (checked
+    // above) and `to` defaults to BUDAPEST_REF (never null), so
+    // haversineDistanceKm cannot return null here. Thrown instead of
+    // silently returning a wrong value, in case that contract ever
+    // changes. Covered by a test that mocks haversineDistanceKm to
+    // force this branch (see customersService.test.ts).
     throw new Error('[api] haversineDistanceKm unexpectedly returned null for non-null coordinates');
   }
   return roundToOneDecimal(raw);

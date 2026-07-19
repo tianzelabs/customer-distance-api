@@ -69,6 +69,13 @@ describe('GET /customers/by-distance (integration, real Postgres via TEST_DATABA
     );
   }
 
+  it('returns an empty array against an empty table, without erroring', async () => {
+    const res = await fetch(`${baseUrl}/customers/by-distance`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual([]);
+  });
+
   it('returns a bare JSON array (not wrapped in an envelope object)', async () => {
     await insertCustomer({ name: 'Solo Customer', telepules: 'Vienna', lat: 48.2082, lon: 16.3738 });
 
@@ -189,6 +196,30 @@ describe('GET /customers/by-distance (integration, real Postgres via TEST_DATABA
     expect(element.lat).toBe(48.2082);
     expect(element.lon).toBe(16.3738);
     expect(typeof element.distanceKm).toBe('number');
+  });
+
+  it('breaks a genuine full tie (same distanceKm AND same name, different telepules) by id ascending — real Postgres, real HTTP', async () => {
+    // UNIQUE(name, telepules) blocks an exact (name, telepules) duplicate,
+    // but allows the SAME name with a DIFFERENT telepules while still
+    // sharing identical coordinates (inserted directly, bypassing the
+    // seed/geocoding pipeline) — producing a genuine, fully-tied
+    // (distanceKm, name) pair whose order can only be decided by id.
+    // Insert order is reversed on purpose: the second insert gets the
+    // lower id, proving the result is sorted by id, not insertion order.
+    await insertCustomer({ name: 'Same Name', telepules: 'Munich', lat: 48.2082, lon: 16.3738 });
+    await insertCustomer({ name: 'Same Name', telepules: 'Vienna', lat: 48.2082, lon: 16.3738 });
+
+    const res = await fetch(`${baseUrl}/customers/by-distance`);
+    const body = await res.json();
+
+    expect(body).toHaveLength(2);
+    expect(body[0].distanceKm).toBe(body[1].distanceKm);
+    expect(body[0].name).toBe('Same Name');
+    expect(body[1].name).toBe('Same Name');
+    // The 'Munich' row was inserted first, so it has the lower id.
+    expect(body[0].telepules).toBe('Munich');
+    expect(body[1].telepules).toBe('Vienna');
+    expect(body[0].id).toBeLessThan(body[1].id);
   });
 
   it('combines all three FR-11 cases in one seeded table: 0km, name tie-break, unknown-town-at-end', async () => {

@@ -225,6 +225,10 @@ export function mapRowToCustomer(row: CustomerRow): Customer {
  * explicit (not `SELECT *`) so the row shape this repository depends on
  * is visible at the call site and stays stable if the table gains
  * columns later.
+ *
+ * No `LIMIT`/pagination: a deliberate, scale-bounded choice, not an
+ * oversight — this app's dataset is a fixed ~15-row homework seed
+ * (PRD/Architecture Spine), and pagination is outside any FR's scope.
  */
 export async function findAll(db: Queryable): Promise<Customer[]> {
   const result = await db.query<CustomerRow>(

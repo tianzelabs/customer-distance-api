@@ -188,4 +188,22 @@ describe('mapRowToCustomer (unit)', () => {
     expect(customer.note).toBe('has a note');
     expect('countryCode' in customer).toBe(false);
   });
+
+  it('keeps a falsy-but-non-null budget/note (0, "") rather than treating them as NULL — proves the strict !== null check', () => {
+    const customer = mapRowToCustomer({
+      id: '3',
+      name: 'Zero Budget Row',
+      telepules: 'Vienna',
+      lat: 48.2082,
+      lon: 16.3738,
+      budget: 0,
+      note: '',
+      country_code: null,
+    });
+
+    expect('budget' in customer).toBe(true);
+    expect(customer.budget).toBe(0);
+    expect('note' in customer).toBe(true);
+    expect(customer.note).toBe('');
+  });
 });
