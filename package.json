@@ -14,6 +14,7 @@
     "migrate:down": "node-pg-migrate down",
     "migrate:test:up": "DATABASE_URL=$TEST_DATABASE_URL node-pg-migrate up",
     "seed": "tsx src/seed.ts",
+    "start": "tsx src/server.ts",
     "test": "vitest run",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration"
