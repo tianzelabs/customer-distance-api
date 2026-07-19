@@ -6,11 +6,24 @@
  *
  * Story 1.4 introduces `upsertCustomer()` (the seed's write path).
  * Story 2.3 adds `countCustomers()` (the `GET /customers/count` read
- * path); `findAll()` (the `by-distance` read path) is added by Story 2.4.
+ * path); Story 2.4 adds `findAll()` (the `by-distance` read path).
  */
 import type { Pool, PoolClient } from 'pg';
 
-/** A stored customer row, mapped to camelCase (country_code -> countryCode, AD-14). */
+/**
+ * A stored customer row, mapped to camelCase (country_code -> countryCode,
+ * AD-14). `budget`/`note`/`countryCode` are OPTIONAL keys, not
+ * nullable-but-present ones: `findAll()`'s row mapping (below) OMITS
+ * these keys entirely (produces `undefined`, not `null`) when the
+ * underlying DB column is `NULL`. This is a deliberate design choice
+ * (Story 2.4 Dev Notes): it lets `res.json()` implement the
+ * Consistency Conventions' "omitted when NULL, never explicit null"
+ * response rule for free, since `JSON.stringify` already drops
+ * `undefined`-valued keys while preserving explicit `null` — no
+ * serialization-layer special-casing needed anywhere. The `| null` in
+ * each type below remains for `UpsertCustomerInput` callers that need
+ * to explicitly clear a column.
+ */
 export interface Customer {
   id: number;
   name: string;
@@ -20,6 +33,20 @@ export interface Customer {
   budget?: number | null;
   note?: string | null;
   countryCode?: string | null;
+}
+
+/**
+ * A `Customer` plus the computed, response-assembly-time `distanceKm`
+ * field (AD-1/AD-6 — never a DB column). Defined here, alongside
+ * `Customer`, per AD-14 ("the Customer TS type and its
+ * CustomerWithDistance extension... defined exactly once, in
+ * customersRepository.ts"). Unlike `budget`/`note`/`countryCode`,
+ * `distanceKm` is ALWAYS present on the object — explicit `null` when
+ * the customer's town is unknown, never omitted (Consistency
+ * Conventions / FR-7).
+ */
+export interface CustomerWithDistance extends Customer {
+  distanceKm: number | null;
 }
 
 /** Fields needed to upsert a customer row (no `id` — assigned by the DB). */
@@ -75,29 +102,57 @@ export async function upsertCustomer(db: Queryable, input: UpsertCustomerInput):
 }
 
 /**
- * Converts `pg`'s string-typed `COUNT(*)` result to a validated `number`
- * (Consistency Conventions: `pg` returns `COUNT(*)`/`BIGSERIAL` columns as
- * strings because Postgres's `bigint`/`count` is 64-bit and JS `number`
- * is only safely precise up to 2^53-1 — the repository must explicitly
- * coerce and validate before returning). Pure and DB-independent, so it
- * is unit-testable without a live Postgres connection.
+ * Converts a `pg`-returned string representation of a Postgres
+ * `bigint`/`count`/`int8` value to a validated `number` (Consistency
+ * Conventions: `pg` returns these as strings because Postgres's 64-bit
+ * integer types exceed JS `number`'s safe precision of 2^53-1 — the
+ * repository must explicitly coerce and validate before returning).
+ * Pure and DB-independent, so it is unit-testable without a live
+ * Postgres connection. Shared by `parseCountResult()` (`COUNT(*)`) and
+ * `parseCustomerId()` (the `BIGSERIAL id` column) — one coercion/
+ * validation rule for every bigint-shaped value this repository reads,
+ * instead of two independently-drifting copies.
+ *
+ * `context` is only used to make the thrown error message identify
+ * which value failed (e.g. `"COUNT(*)"` vs. `"customers.id"`).
  */
-export function parseCountResult(raw: string): number {
+function parseSafeNonNegativeInteger(raw: string, context: string): number {
   // Require a plain, non-negative decimal digit string before even
   // attempting Number() conversion. Number()'s own coercion is too
   // lenient for validating an untrusted-shaped string: it accepts ""/
   // whitespace-only as 0, hex ("0x10"), and scientific notation ("1e2")
   // as valid numbers, and Number.isSafeInteger() alone does not reject
-  // negative values — none of which COUNT(*) can ever legitimately
-  // return.
+  // negative values — none of which COUNT(*) or a BIGSERIAL id can ever
+  // legitimately return.
   if (!/^\d+$/.test(raw)) {
-    throw new Error(`[database] COUNT(*) returned a value that is not a safe, finite integer: "${raw}"`);
+    throw new Error(`[database] ${context} returned a value that is not a safe, finite integer: "${raw}"`);
   }
   const value = Number(raw);
   if (!Number.isFinite(value) || !Number.isSafeInteger(value)) {
-    throw new Error(`[database] COUNT(*) returned a value that is not a safe, finite integer: "${raw}"`);
+    throw new Error(`[database] ${context} returned a value that is not a safe, finite integer: "${raw}"`);
   }
   return value;
+}
+
+/**
+ * Converts `pg`'s string-typed `COUNT(*)` result to a validated `number`.
+ * Thin wrapper over `parseSafeNonNegativeInteger` — kept as its own
+ * named export (rather than inlining the context string at every call
+ * site) so its existing call sites/tests are unaffected by the Story
+ * 2.4 refactor that introduced the shared helper.
+ */
+export function parseCountResult(raw: string): number {
+  return parseSafeNonNegativeInteger(raw, 'COUNT(*)');
+}
+
+/**
+ * Converts `pg`'s string-typed `BIGSERIAL id` column to a validated
+ * `number`, same rigor as `parseCountResult()` (Consistency Conventions:
+ * "the repository must explicitly convert [id] to a number and validate
+ * it is finite/safely representable before returning it").
+ */
+export function parseCustomerId(raw: string): number {
+  return parseSafeNonNegativeInteger(raw, 'customers.id');
 }
 
 /**
@@ -113,4 +168,67 @@ export async function countCustomers(db: Queryable): Promise<number> {
     throw new Error('[database] COUNT(*) returned no rows');
   }
   return parseCountResult(row.count);
+}
+
+/** Raw shape of a `customers` row as `pg` returns it, before domain mapping. */
+interface CustomerRow {
+  id: string;
+  name: string;
+  telepules: string;
+  lat: number | null;
+  lon: number | null;
+  budget: number | null;
+  note: string | null;
+  country_code: string | null;
+}
+
+/**
+ * Maps one raw DB row to the `Customer` domain shape: `country_code` ->
+ * `countryCode`, `id` coerced via `parseCustomerId` (AD-14/Consistency
+ * Conventions). `lat`/`lon`/`budget` need no coercion — `pg` auto-parses
+ * `double precision`/`integer` columns as JS `number` by default; only
+ * `int8`/`bigint`-typed columns (here, just `id`) come back as strings.
+ *
+ * NULL-omission design decision (Story 2.4 Dev Notes): `budget`/`note`/
+ * `countryCode` are set on the result object ONLY when the column is
+ * non-NULL — a NULL column produces an absent key (`undefined`), never
+ * an explicit `null`. This is what lets the route's `res.json()` omit
+ * these keys "for free" per the Consistency Conventions response-shape
+ * rule, with no special-casing at the serialization layer.
+ */
+export function mapRowToCustomer(row: CustomerRow): Customer {
+  const customer: Customer = {
+    id: parseCustomerId(row.id),
+    name: row.name,
+    telepules: row.telepules,
+    lat: row.lat,
+    lon: row.lon,
+  };
+  if (row.budget !== null) {
+    customer.budget = row.budget;
+  }
+  if (row.note !== null) {
+    customer.note = row.note;
+  }
+  if (row.country_code !== null) {
+    customer.countryCode = row.country_code;
+  }
+  return customer;
+}
+
+/**
+ * Returns every stored customer via a static, parameter-free
+ * `SELECT ... FROM customers` — no `WHERE` clause, no dynamic value to
+ * bind, so this is exempt from the parameterized-query requirement
+ * (AD-2/addendum.md exemption for static, parameter-free `SELECT`s),
+ * same exemption already used by `countCustomers()`. Column list is
+ * explicit (not `SELECT *`) so the row shape this repository depends on
+ * is visible at the call site and stays stable if the table gains
+ * columns later.
+ */
+export async function findAll(db: Queryable): Promise<Customer[]> {
+  const result = await db.query<CustomerRow>(
+    'SELECT id, name, telepules, lat, lon, budget, note, country_code FROM customers',
+  );
+  return result.rows.map(mapRowToCustomer);
 }
