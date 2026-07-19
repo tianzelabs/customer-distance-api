@@ -8,11 +8,18 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "migrate:create": "node-pg-migrate create",
+    "migrate:up": "node-pg-migrate up",
+    "migrate:down": "node-pg-migrate down"
   },
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "node-pg-migrate": "8.0.4",
     "typescript": "6.0.2"
+  },
+  "dependencies": {
+    "pg": "8.22.0"
   }
 }
