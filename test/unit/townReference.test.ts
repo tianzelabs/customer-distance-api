@@ -65,4 +65,26 @@ describe('townReference', () => {
     expect(lookupTownCoordinate(normalizeTown('Nonexistentville'))).toBeUndefined();
     expect(lookupTownCoordinate(normalizeTown(''))).toBeUndefined();
   });
+
+  it('does not resolve Object.prototype member names as if they were towns', () => {
+    // Regression guard: TOWN_REFERENCE is built via Object.create(null), so
+    // these must miss cleanly instead of returning an inherited function/object.
+    expect(lookupTownCoordinate('constructor')).toBeUndefined();
+    expect(lookupTownCoordinate('toString')).toBeUndefined();
+    expect(lookupTownCoordinate('hasownproperty')).toBeUndefined();
+    expect(lookupTownCoordinate('__proto__')).toBeUndefined();
+    expect(lookupTownCoordinate('valueof')).toBeUndefined();
+  });
+
+  it('the reference table and every coordinate in it (including BUDAPEST_REF) are frozen', () => {
+    expect(Object.isFrozen(BUDAPEST_REF)).toBe(true);
+    expect(() => {
+      // @ts-expect-error -- intentional mutation attempt on a Readonly type
+      BUDAPEST_REF.lat = 0;
+    }).toThrow();
+    expect(BUDAPEST_REF.lat).toBe(47.4979);
+
+    const vienna = lookupTownCoordinate('vienna');
+    expect(Object.isFrozen(vienna)).toBe(true);
+  });
 });

@@ -4,7 +4,7 @@ baseline_commit: a0b04021db985908a5c02ad4d270deac405c555f
 
 # Story 1.3: Offline település-koordináta referencia és `normalizeTown()`
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -144,3 +144,22 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 - 2026-07-19: Story created (`bmad-create-story` workflow), Status `ready-for-dev`.
 - 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode) — Tasks 1-5 completed. Vitest 4.1.10 installed, `townReference.ts` (15 towns + `BUDAPEST_REF`) and `normalizeTown.ts` (AD-12 entry point + optional Budapest-district folding) implemented, unit tests written and run for real (32/32 passing). All 8 ACs verified. Status `in-progress` → `review`.
+- 2026-07-19: Code review (Blind Hunter, Edge Case Hunter, Acceptance Auditor) — coordinate values manually spot-checked against real-world geography by the Acceptance Auditor, all 15 correct. 3 patches applied, 5 deferred, 4 dismissed. 35/35 tests passing after fixes. Status `done`.
+
+### Review Findings
+
+- [x] [Review][Patch] `lookupTownCoordinate` used a plain object as a lookup map, so a normalized key matching an inherited `Object.prototype` member (`"constructor"`, `"toString"`, `"hasownproperty"`, `"__proto__"`, `"valueof"`) would return that inherited member instead of `undefined`, violating the function's own documented contract [src/geocoding/townReference.ts] — fixed: `TOWN_REFERENCE` now built via `Object.create(null)` (no prototype chain). Regression test added.
+- [x] [Review][Patch] `Object.freeze(TOWN_REFERENCE)` was shallow — the individual coordinate objects, including the shared `BUDAPEST_REF` singleton (AD-13), remained mutable [src/geocoding/townReference.ts] — fixed: every coordinate literal (including `BUDAPEST_REF`) is now individually frozen via a small `coord()` helper. Regression test added (`Object.isFrozen`, mutation throws in strict/ESM mode).
+- [x] [Review][Patch] `normalizeTown()`'s own doc comment claims "never throws," but `String.prototype.normalize` throws a `TypeError` on `null`/`undefined` input (a realistic failure mode for hand-edited seed JSON with a missing `location.city`) [src/geocoding/normalizeTown.ts] — fixed: added an explicit `typeof input !== 'string'` guard returning `''`. Regression test added.
+- [x] [Review][Patch] Doc comment said the table covers "15 towns... plus the dedicated Budapest reference point," implying 16 distinct entries, while the object literal has exactly 15 keys (Budapest is one of the 15, not an extra) [src/geocoding/townReference.ts] — fixed: reworded for clarity.
+- [x] [Review][Defer] Budapest-district-folding regex (optional FR-4 extra) accepts out-of-range district numbers (e.g. "Budapest 99") and non-rigorous roman-numeral strings (e.g. "Budapest mdccl") — deferred, reason: this optional feature is never exercised by the real 15-row seed (no district notations exist in `seed-customers.json`), tightening the regex to true roman-numeral/1-23-range grammar adds real complexity for a code path with no live impact; revisit only if district-style input actually appears.
+- [x] [Review][Defer] District regex has no required separator before the numeral (e.g. "budapestxi" would fold) — deferred, same reasoning as above (optional, dead against real data).
+- [x] [Review][Defer] "Budapest," / "Budapest." with trailing punctuation but no numeral does not fold back to plain "budapest" — deferred, hypothetical malformed input, not present in real seed data.
+- [x] [Review][Defer] Hungarian inflected suffix on district word (e.g. "kerülete" vs "kerulet") not matched — deferred, same reasoning, optional feature not exercised by real data.
+- [x] [Review][Defer] `normalizeTown()`'s actual step order (diacritic-strip before trim/lowercase) differs textually from the story's Task 3 description (trim→lowercase→diacritic-strip→whitespace-collapse) — deferred, reason: confirmed functionally equivalent for all realistic inputs (NFD decomposition is case/whitespace-independent), zero behavior impact, cosmetic task-text wording only.
+
+**Dismissed (4, with reasoning):**
+- "No reference-equality test for `BUDAPEST_REF` identity" — already present (`expect(coordinate).toBe(BUDAPEST_REF)` in `townReference.test.ts`); the reviewing subagent wasn't shown the test file (only the two source files, for prompt brevity).
+- "No runtime bounds validation on lat/lon literals" — already covered: `townReference.test.ts`'s `it.each` over all 15 seed towns asserts `lat`/`lon` are within valid ranges, and the Acceptance Auditor independently manually verified all 15 coordinates against real-world values (all correct).
+- Turkish dotless-i casing edge case — no Turkish town names anywhere in this project's scope; speculative, disproportionate to fix.
+- `package-lock.json`/`sprint-status.yaml` "missing from diff" — artifact of the trimmed diff given to reviewers; verified present via `git show --stat` on the actual commits.

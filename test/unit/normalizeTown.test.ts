@@ -44,6 +44,17 @@ describe('normalizeTown', () => {
     expect(normalizeTown('   ')).toBe('');
   });
 
+  it('never throws even for null/undefined/non-string input (e.g. a malformed seed row)', () => {
+    // @ts-expect-error -- intentionally passing invalid input types
+    expect(() => normalizeTown(null)).not.toThrow();
+    // @ts-expect-error -- intentionally passing invalid input types
+    expect(normalizeTown(null)).toBe('');
+    // @ts-expect-error -- intentionally passing invalid input types
+    expect(() => normalizeTown(undefined)).not.toThrow();
+    // @ts-expect-error -- intentionally passing invalid input types
+    expect(normalizeTown(undefined)).toBe('');
+  });
+
   describe('Budapest district folding (optional FR-4 robustness extra)', () => {
     it('folds roman-numeral district notation onto "budapest"', () => {
       expect(normalizeTown('Budapest XIII.')).toBe('budapest');

@@ -30,9 +30,13 @@ const BUDAPEST_DISTRICT_PATTERN =
  * Normalizes a town name for reference lookup: trims, lowercases,
  * strips Unicode diacritics, and collapses internal whitespace to a
  * single space. Never throws — always returns a string (possibly
- * empty for empty/whitespace-only input).
+ * empty for empty/whitespace-only/non-string input).
  */
 export function normalizeTown(input: string): string {
+  if (typeof input !== 'string') {
+    return '';
+  }
+
   const normalized = input
     .normalize('NFD')
     .replace(COMBINING_MARKS_PATTERN, '')
