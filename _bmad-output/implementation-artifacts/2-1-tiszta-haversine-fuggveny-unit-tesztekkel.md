@@ -4,7 +4,7 @@ baseline_commit: fd9dc19dc7f813227c7dec3f12555feeca957fb
 
 # Story 2.1: Tiszta Haversine-függvény unit tesztekkel
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -89,7 +89,7 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 - Independent Python Haversine cross-check (story-creation time, R=6371 km): Budapest↔Vienna = 214.044 km; Budapest↔Munich = 561.152 km — used to set the test tolerances in `haversine.test.ts` (±1 km each) without relying on memorized real-world figures.
 - `npx tsc --noEmit` after writing `src/services/haversine.ts` — clean, no type errors (`TownCoordinate | null` default-parameter typing checked out under `strict: true`).
-- `npm run test:unit` (`vitest run test/unit`) executed for real: **4 test files passed, 44 tests passed** (35 pre-existing + 9 new in `haversine.test.ts`), ~192ms duration.
+- `npm run test:unit` (`vitest run test/unit`) executed for real: **4 test files passed, 44 tests passed** (38 pre-existing + 6 new in `haversine.test.ts`), ~192ms duration.
 - `npm test` (`vitest run`, unit+integration together, real Postgres running on port 5433 via `docker ps`) executed for real: **5 test files passed, 47 tests passed** (44 unit + 3 integration in `test/integration/seed.test.ts`), ~242ms duration. Confirms this story's addition did not regress the integration suite.
   ```
   RUN  v4.1.10 .../customer-distance-api
@@ -125,4 +125,21 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 ### Change Log
 
 - 2026-07-19: Story created (`bmad-create-story` workflow), Status `ready-for-dev`.
-- 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode) — Tasks 1-3 completed. `src/services/haversine.ts` (generic two-coordinate Haversine function with `BUDAPEST_REF`-defaulted second parameter) and `test/unit/haversine.test.ts` (9 tests: 3 FR-9-required + 3 sanity checks, using real project coordinates) implemented and run for real (44/44 unit, 47/47 full suite). All 5 ACs verified. Status `in-progress` → `review`.
+- 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode) — Tasks 1-3 completed. `src/services/haversine.ts` (generic two-coordinate Haversine function with `BUDAPEST_REF`-defaulted second parameter) and `test/unit/haversine.test.ts` (6 tests: 3 FR-9-required + 3 sanity checks, using real project coordinates) implemented and run for real (44/44 unit, 47/47 full suite). All 5 ACs verified. Status `in-progress` → `review`.
+- 2026-07-19: Code review (Blind Hunter, Edge Case Hunter, Acceptance Auditor) — Acceptance Auditor independently recomputed the Haversine formula from scratch and confirmed both real-world distance claims (Budapest-Vienna 214.044km, Budapest-Munich 561.152km) are correct, and caught a test-count bookkeeping error in this Dev Agent Record (now fixed above: 38+6=44, not 35+9). 2 patches applied to the implementation (FP-safety clamp, JSDoc), 11 dismissed (matched established anti-over-engineering precedent or unreachable by this app's actual data domain). 47/47 tests still passing after fixes. Status `done`.
+
+### Review Findings
+
+- [x] [Review][Patch] Classic Haversine floating-point failure mode near antipodal points: `a` can round to fractionally above 1, making `1 - a` negative and `Math.sqrt` return `NaN` [src/services/haversine.ts] — fixed: both `Math.sqrt` calls now clamp their argument to `Math.max(0, ...)`. Not reachable by this app's actual data (15 European cities, nowhere near antipodal), but the fix is free and standard practice for Haversine implementations.
+- [x] [Review][Patch] No documentation of: why `EARTH_RADIUS_KM = 6371` (mean-radius approximation, accuracy ceiling), the `0` (real distance) vs `null` (invalid input) footgun for a naive `if (!distance)` caller check, or the `to` parameter's null-vs-omitted behavioral fork — fixed: JSDoc expanded to cover all three.
+- [x] [Review][Patch] (Acceptance Auditor) Dev Agent Record and Change Log miscounted the new tests as "9 (3 FR-9 + 3 sanity)" when `haversine.test.ts` actually has 6 `it()` blocks (38 pre-existing + 6 new = 44, not 35+9) — fixed: both entries corrected above. Headline pass counts (44/44, 47/47) were already correct; only the internal breakdown was wrong.
+
+**Dismissed (11, with reasoning):**
+- No validation of out-of-range/NaN coordinate fields — consistent with precedent already established across Stories 1.2/1.4's reviews: the only real caller path is this app's own `townReference.ts` (frozen, hand-verified literals), not external/user input; AD-10 anti-over-engineering.
+- Loose (`==`) vs strict (`===`) null check not handling `undefined` — this codebase is strictly typed (`TownCoordinate | null`, never `| undefined`); TypeScript itself prevents passing `undefined` from any internal caller.
+- Tests couple to `townReference.ts`'s real data rather than hardcoded literals — this is the project's own established, deliberate testing convention (already used in Stories 1.3/1.4: "reuse the exact coordinates the app actually looks up"), not a defect.
+- Non-null assertions (`!`) on test-time lookups could throw a cryptic error if a town were ever removed from the reference table — low-value hypothetical, matches precedent for dismissed test-code defensive concerns.
+- Tolerance-based assertions (±1-2km) could theoretically mask a systematic error — resolved in practice: the Acceptance Auditor independently recomputed the formula from scratch and confirmed both distances to 3 decimal places.
+- No test near the antimeridian/poles — this app's data domain is 15 European cities; not reachable, disproportionate to test.
+- No component-isolated tests (pure-`dLat`-only, pure-`dLon`-only cases) — FR-9's three required cases are covered and independently verified correct; additional coverage is nice-to-have beyond spec.
+- "Exactly 0"/symmetric tests relying on unstated floating-point guarantees — true but not a practical risk for the current formula shape; no action needed.
