@@ -4,7 +4,7 @@ baseline_commit: 807c29ba990ec0fba7d9825d76cb0037e47d51da
 
 # Story 2.2: Express app-scaffold tesztelhető szétválasztással és központi hibakezeléssel
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
