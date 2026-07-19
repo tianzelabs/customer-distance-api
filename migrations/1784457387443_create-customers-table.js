@@ -44,5 +44,5 @@ export const up = (pgm) => {
  * @returns {Promise<void> | void}
  */
 export const down = (pgm) => {
-  pgm.dropTable('customers');
+  pgm.dropTable('customers', { ifExists: true });
 };

@@ -16,10 +16,10 @@
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "node-pg-migrate": "8.0.4",
     "typescript": "6.0.2"
   },
   "dependencies": {
+    "node-pg-migrate": "8.0.4",
     "pg": "8.22.0"
   }
 }

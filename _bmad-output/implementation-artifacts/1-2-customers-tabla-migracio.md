@@ -4,7 +4,7 @@ baseline_commit: b4bdee539af34d018eb813c324a1eaace836f699
 
 # Story 1.2: `customers` tábla migráció
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -118,11 +118,32 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 - `migrations/1784457387443_create-customers-table.js`
 
 **Modified:**
-- `package.json` (node-pg-migrate 8.0.4 devDependency, pg 8.22.0 dependency, migrate:create/up/down npm scripts)
+- `package.json` (node-pg-migrate 8.0.4 + pg 8.22.0 dependencies, migrate:create/up/down npm scripts)
 - `package-lock.json`
-- `_bmad-output/implementation-artifacts/sprint-status.yaml` (1-2-customers-tabla-migracio: backlog → ready-for-dev → in-progress → review; last_updated: 2026-07-19)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (1-2-customers-tabla-migracio: backlog → ready-for-dev → in-progress → review → done; last_updated: 2026-07-19)
 
 ### Change Log
 
 - 2026-07-19: Story létrehozva (`bmad-create-story` workflow), Status `ready-for-dev`.
 - 2026-07-19: Story implementálva (`bmad-dev-story` workflow, autonomous mode) — Tasks 1–6 elvégezve, mind a 7 AC verifikálva valódi Postgres ellen. Status `in-progress` → `review`.
+- 2026-07-19: Code review (3 réteg: Blind Hunter, Edge Case Hunter, Acceptance Auditor) — 2 patch alkalmazva, 2 deferred, 11 dismissed indoklással. Status `done`.
+
+### Review Findings
+
+- [x] [Review][Patch] `node-pg-migrate` `devDependencies`-ben volt, de a `migrate:up`/`migrate:down` npm script-eknek szükséges — `--omit=dev`/production telepítés esetén hiányozna [package.json] — javítva, átkerült `dependencies`-be, lockfile frissítve (`npm install`), migráció újra-ellenőrizve (down/up hibátlan).
+- [x] [Review][Patch] `down()` a táblát feltétel nélkül dobta el, nincs `ifExists` védelem — ha valaha kétszer futtatnák `down`-t, vagy a tábla már törölve lenne, hibázna [migrations/1784457387443_create-customers-table.js] — javítva: `pgm.dropTable('customers', { ifExists: true })`.
+- [x] [Review][Defer] Nincs automatizált (Vitest) teszt a migráció sémájára/megszorításaira, csak manuális `psql`/`information_schema` + funkcionális negatív-insert verifikáció — deferred, indoklás: a Vitest csak az 1.3 story-tól érhető el ebben a projektben; ha szükségesnek látszik, egy könnyű séma-ellenőrző integrációs teszt hozzáadható később, de egyetlen FR sem követeli meg.
+- [x] [Review][Defer] `node-pg-migrate` natívan a shell `DATABASE_URL` env változóját olvassa, nincs beépített `.env` auto-load — a README-nek (3.1 story) explicit dokumentálnia kell, hogyan kerüljön be a `DATABASE_URL` a shell környezetbe a `npm run migrate:*` parancsok előtt — deferred a 3.1 story Dev Notes-ába.
+
+**Dismissed (11, indoklással — a reviewer subagentek nem láttak teljes projekt-kontextust, ezért több találat már ratifikált architektúra-/PRD-döntéssel ütközött):**
+- `country_code` nincs formátum-ellenőrizve (uppercase/ISO-3166 regex) — az `ARCHITECTURE-SPINE.md` pontos DDL-je nem tartalmaz ilyen megszorítást; AD-7 "pontosan a megadott módon" mandátuma nem engedi az egyoldalú bővítést ebben a story-ban.
+- `budget` nincs nemnegativitás-ellenőrizve — ugyanaz az indoklás, nem szerepel a ratifikált DDL-ben, dekoratív mező (PRD szerint nem használt a távolság-logikában).
+- `name`/`telepules` üres string nincs kizárva — nem szerepel a ratifikált DDL-ben; a valós seed-adat sosem üres.
+- `UNIQUE(name, telepules)` case-sensitive, nincs normalizálva — szándékos PRD/architektúra-döntés (FR-2/AD-5): a kulcs a szó szerinti `name`+`telepules`, a normalizálás a település-egyeztetésre vonatkozik (FR-4/AD-12), nem a customer-azonosító kulcsra.
+- `telepules` oszlopnév magyar, a többi angol — explicit, dokumentált PRD-döntés (`telepules` az eredeti spec ASCII mezőneve, szándékosan nem fordítva/ékezetezve).
+- Nincs PostGIS/geography típus vagy spatial index — explicit architektúra-döntés (AD-10, ne over-engineeringelj) egy 15-soros adathalmazhoz; a Haversine app-szinten történik.
+- Pontos verzió-pinnelés `node-pg-migrate`/`pg`-nél, de nem `@types/node`-nál — szándékos, dokumentált konvenció (`ARCHITECTURE-SPINE.md` Stack tábla), nem véletlen inkonzisztencia.
+- `package-lock.json` "hiányzik" a diffből — a review-nak adott diff szándékosan ki lett vágva a `_bmad-output` zajtól; a fájl valójában frissült (`git diff --stat` megerősíti).
+- `id` bigint stringként jön vissza `pg`-ből, nincs megerősített konzumens-konvenció — már lefedve az AD-14/Consistency Conventions által, de az implementációja az 1.4/2.x story-k feladata, nem ezé.
+- Nincs `COMMENT ON` oszlop-/tábla-dokumentáció — nincs ilyen FR/AD-követelmény, nem in-scope.
+- AC4/AC6 "csak a story-narratívában bizonyított, nem a diffben" — a psql/CLI-verifikáció ténylegesen megtörtént ebben a session-ben (ld. Debug Log/Completion Notes), a diff természetéből adódóan nem tartalmazhat terminál-tranzakciót.
