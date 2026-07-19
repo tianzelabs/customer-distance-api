@@ -14,7 +14,10 @@
  */
 import { config as loadDotenv } from 'dotenv';
 
-loadDotenv();
+// quiet: true suppresses dotenv's own startup banner/promotional "tip" line
+// (cosmetic upstream package behavior, unrelated to this app) so command
+// output stays predictable for anyone following the README.
+loadDotenv({ quiet: true });
 
 const DEFAULT_PORT = 3000;
 

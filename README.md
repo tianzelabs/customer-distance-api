@@ -15,6 +15,8 @@ Ez a README egy tiszta gépen (Node.js, Docker, npm megléte esetén), kizáról
 
 Nincs szükség egyéb külső szolgáltatásra (nincs külső geokódoló API, nincs felhő-DB) — a teljes lánc lokálisan, offline fut.
 
+Az alábbi parancsok POSIX shell-t (bash/zsh/WSL/git-bash) feltételeznek — natív Windows `cmd.exe`/PowerShell alatt néhány szintaxis (pl. `cp`, az inline env-változó-előtag forma) nem működik változtatás nélkül.
+
 ## Gyors indítás (teljes végigfutás)
 
 Az alábbi lépések sorban, egymás után futtatandók egy tiszta klónból.
@@ -36,11 +38,15 @@ docker compose up -d
 
 Egy `postgres:18` konténer indul, két logikai adatbázissal ugyanazon instance-en: `customer_distance` (dev) és `customer_distance_test` (integrációs tesztekhez). A konténer a host **5433**-as portján érhető el (nem az alapértelmezett 5432-n) — ez azért, hogy elkerülje az ütközést egy másik, ehhez a projekthez nem tartozó, esetlegesen már az 5432-t foglaló lokális Postgres instance-szal. A belső, konténeren belüli port változatlanul 5432 marad, csak a host-oldali leképezés más.
 
-Várd meg, amíg a konténer `healthy` állapotba kerül:
+Várd meg (kb. 10-15 másodperc), amíg a konténer `healthy` állapotba kerül — szükség esetén futtasd többször:
 
 ```
 docker compose ps
 ```
+
+**Hibaelhárítás:**
+- Ha a `docker compose up -d` azonnal hibázik: ellenőrizd, hogy a Docker daemon fut-e (`docker info`), és hogy az 5433-as host port nincs-e más folyamat által foglalva.
+- Ha a konténer tartósan `unhealthy` marad (nem csak az induláskor várható néhány másodperc): a `customer_distance_test` adatbázist létrehozó inicializációs script (`docker/initdb/01-create-test-db.sql`) kizárólag **üres** volume mellett, első indításkor fut le. Ha egy korábbi, hibás állapotú volume maradt vissza, futtasd: `docker compose down -v && docker compose up -d` (ez törli az addigi adatot is — utána újra kell migrálni és seedelni, ld. 3–4. lépés).
 
 ### 3. Migráció futtatása (mindkét logikai adatbázison)
 
@@ -51,7 +57,7 @@ npm run migrate:test:up
 
 Az első a dev adatbázist (`customer_distance`, `DATABASE_URL`) migrálja, a második a teszt-adatbázist (`customer_distance_test`, `TEST_DATABASE_URL`). **Mindkettő szükséges** — az integrációs tesztek (lásd lentebb) a `customer_distance_test`-en futnak, migráció nélkül `relation "customers" does not exist` hibával elhasalnak.
 
-A `node-pg-migrate` a shell környezetéből olvassa a `DATABASE_URL`-t (nincs beépített `.env` auto-load), de a projekt `dotenv`-et injektál a scripteken keresztül, így a fenti két parancs közvetlenül, külön exportálás nélkül is működik egy `.env` fájllal rendelkező gyökérkönyvtárból.
+A `node-pg-migrate` CLI-je saját maga hív `dotenv`-et induláskor, ezért a `.env` fájlból automatikusan betölti a `DATABASE_URL`-t — nincs szükség külön exportálásra. A teszt-adatbázishoz a `migrate:test:up` script a CLI saját `--database-url-var TEST_DATABASE_URL` kapcsolóját használja, ami a CLI-nek megmondja, hogy ezúttal a `TEST_DATABASE_URL` (nem a `DATABASE_URL`) értékét használja kapcsolatként — ez a helyes mechanizmus egy Node-folyamaton *belüli* env-változó-átirányításra (egy shell-szintű `DATABASE_URL=$TEST_DATABASE_URL ...` előtag ehelyett hibázna, mert a shell a `$TEST_DATABASE_URL`-t még azelőtt kiértékelné, hogy a `.env` egyáltalán betöltődne, és egy üres `DATABASE_URL`-t állítana be, amit a CLI saját `dotenv` hívása utólag már nem ír felül).
 
 ### 4. Adatbázis seedelése
 
@@ -67,7 +73,7 @@ A `seed-customers.json` 15 rekordját tölti be idempotens `UPSERT`-tel (kulcs: 
 npm start
 ```
 
-Ezzel ekvivalens, közvetlen forma (ha nem szeretnéd az npm script-et használni): `npx tsx src/server.ts`. A szerver a `PORT` környezeti változót olvassa (`.env`-ben `3000`, opcionális — ha nincs beállítva, a kód is `3000`-re esik vissza). Sikeres indításkor a konzolon: `[api] Listening on port 3000`.
+Ezzel gyakorlatilag azonos, közvetlen forma (ha nem szeretnéd az npm script-et használni): `npx tsx src/server.ts` — ma ugyanazt futtatja, bár az `npm start` emellett az npm saját életciklus-hookjait (pl. egy jövőbeli `prestart`-ot) és `.npmrc` konfigurációt is figyelembe venné, a közvetlen `npx` hívás nem. A szerver a `PORT` környezeti változót olvassa (`.env`-ben `3000`, opcionális — ha nincs beállítva, a kód is `3000`-re esik vissza). Sikeres indításkor a konzolon: `[api] Listening on port 3000`.
 
 ### 6. Végpontok ellenőrzése
 
@@ -87,7 +93,7 @@ Valódi, seedelt dev-adatbázis elleni példaválasz:
 curl -s http://localhost:3000/customers/by-distance
 ```
 
-Valódi példaválasz (csupasz JSON tömb, minden elem a teljes tárolt rekordot + a Budapesttől mért, 1 tizedesre kerekített `distanceKm`-et tartalmazza; `NULL` oszlopok, pl. hiányzó `budget`, a kulcs teljes elhagyásával, nem explicit `null` értékkel jelennek meg; a lista `distanceKm` szerint növekvő sorrendben, ismeretlen település (`distanceKm: null`) a lista végén):
+Csupasz JSON tömb; minden elem a teljes tárolt rekordot + a Budapesttől mért, 1 tizedesre kerekített `distanceKm`-et tartalmazza; a lista `distanceKm` szerint növekvő sorrendben. Az alábbi 3 elem (első kettő + utolsó) a valós, seedelt 15-elemű válaszból származik — a köztes 12 elem a rövidség kedvéért nincs feltüntetve, valódi végigfutáshoz futtasd magad a fenti `curl` parancsot:
 
 ```json
 [
@@ -98,7 +104,7 @@ Valódi példaválasz (csupasz JSON tömb, minden elem a teljes tárolt rekordot
     "lat": 47.4979,
     "lon": 19.0402,
     "budget": 850,
-    "note": "Loves lush, jungle-style rooms...",
+    "note": "Loves lush, jungle-style rooms and asks for a large ficus in every project. Prefers deep green foliage over anything with flowers.",
     "countryCode": "HU",
     "distanceKm": 0
   },
@@ -109,11 +115,17 @@ Valódi példaválasz (csupasz JSON tömb, minden elem a teljes tárolt rekordot
     "lat": 48.2082,
     "lon": 16.3738,
     "budget": 950,
-    "note": "Prefers architectural, sculptural plants...",
+    "note": "Prefers architectural, sculptural plants that match her modernist furniture. Big fan of monstera and bird-of-paradise.",
     "countryCode": "AT",
     "distanceKm": 214
-  },
-  { "...": "további 12 elem, növekvő distanceKm szerint..." },
+  }
+]
+```
+
+...(12 további elem, `distanceKm` szerint tovább növekedve)...
+
+```json
+[
   {
     "id": 9,
     "name": "Isabella Silva",
@@ -121,7 +133,7 @@ Valódi példaválasz (csupasz JSON tömb, minden elem a teljes tárolt rekordot
     "lat": 38.7223,
     "lon": -9.1393,
     "budget": 560,
-    "note": "Tropical, warm vibe for a small balcony...",
+    "note": "Tropical, warm vibe for a small balcony. Loves calathea for the patterned leaves but knows they need humidity and care.",
     "countryCode": "PT",
     "distanceKm": 2469.4
   }
@@ -130,13 +142,15 @@ Valódi példaválasz (csupasz JSON tömb, minden elem a teljes tárolt rekordot
 
 Összesen 15 elem — Anna Kovács (Budapest) `distanceKm: 0`-val az elején, Isabella Silva (Lisbon) a legtávolabbi városként a lista végén.
 
+**A shippelt 15 valós ügyfél mindegyike ismert városban van** — egyikük sem gyakorolja az `distanceKm: null` (ismeretlen település) vagy a hiányzó opcionális mező (`budget`/`note`/`countryCode` kulcs teljes elhagyása) ágat, ezért ezt a két, ténylegesen implementált viselkedést a fenti valós példa nem mutatja be. Mindkettő automatizált teszttel bizonyított dedikált fixture-adaton (`test/integration/customersByDistance.test.ts`, `test/unit/customersService.test.ts`) — API-szerződésként ugyanúgy érvényesek, csak a jelenlegi seed-adat nem véletlenül nem hozza felszínre őket.
+
 ### 7. Tesztek futtatása
 
 ```
 npm test
 ```
 
-A teljes suite (unit + integrációs), mindkét adatbázis migrálva szükséges hozzá (lásd 3. lépés). Valódi végigfutáson: **11 teszt-fájl, 108 teszt, mind zöld**.
+A teljes suite (unit + integrációs), mindkét adatbázis migrálva szükséges hozzá (lásd 3. lépés). Valódi végigfutáson, ennek a commitnak az állapotában: **11 teszt-fájl, 108 teszt, mind zöld** (a pontos szám a projekt fejlődésével nőni fog — a fontos jel a "mind zöld", nem a konkrét darabszám).
 
 ```
 npm run test:unit
@@ -191,13 +205,15 @@ A repo gyökerében lévő [`.mcp.json`](./.mcp.json) egy Postgres MCP szervert 
 | Réteg / eszköz | Választás |
 | --- | --- |
 | Futásidő | Node.js 24 |
-| Nyelv | TypeScript 6.0.2 (pontosan pinnelve) |
+| Nyelv | TypeScript 6.0.2 |
 | HTTP keretrendszer | Express 5.2.1 |
 | Adatbázis | PostgreSQL 18 (`postgres:18`, Docker Compose) |
 | DB kliens | `pg` 8.22.0 (`Pool`, nyers paraméterezett SQL, nincs ORM) |
-| Migráció | `node-pg-migrate` 8.0.4 (pontosan pinnelve) |
+| Migráció | `node-pg-migrate` 8.0.4 |
 | Tesztfuttató | Vitest 4.1.10 |
-| Dev-time DB ellenőrzés | PostgreSQL MCP (`@modelcontextprotocol/server-postgres`) |
+| Dev-time DB ellenőrzés | PostgreSQL MCP (`@modelcontextprotocol/server-postgres@0.6.2`) |
+
+Minden fenti verzió pontosan pinnelve van a `package.json`-ban (nincs `^`/`~` prefix) — nem csak a korábban kiemelt TypeScript/`node-pg-migrate`, hanem mindegyik: ez a projekt következetes, végig alkalmazott konvenciója.
 
 Réteg-elrendezés (`src/`): `routes/` (HTTP I/O) → `services/` (üzleti logika: Haversine-összeállítás, kerekítés, rendezés) → `repositories/` (SQL + sor→domain leképezés) → PostgreSQL, plusz egy önálló `seed.ts` belépési pont, amely a repository- és geocoding-réteget újrahasználva, a HTTP/service rétegek megkerülésével tölti be az adatot. Konfiguráció egyetlen helyen (`src/config/env.ts`, fail-fast validáció), megosztott `Pool` egyetlen helyen (`src/db/pool.ts`), központi hibakezelő middleware (`src/middleware/errorHandler.ts`).
 

@@ -10,9 +10,9 @@
   "scripts": {
     "build": "tsc",
     "migrate:create": "node-pg-migrate create",
-    "migrate:up": "node-pg-migrate up",
-    "migrate:down": "node-pg-migrate down",
-    "migrate:test:up": "DATABASE_URL=$TEST_DATABASE_URL node-pg-migrate up",
+    "migrate:up": "DOTENV_CONFIG_QUIET=true node-pg-migrate up",
+    "migrate:down": "DOTENV_CONFIG_QUIET=true node-pg-migrate down",
+    "migrate:test:up": "DOTENV_CONFIG_QUIET=true node-pg-migrate up --database-url-var TEST_DATABASE_URL",
     "seed": "tsx src/seed.ts",
     "start": "tsx src/server.ts",
     "test": "vitest run",
