@@ -6,11 +6,9 @@
  * drive it directly (e.g. bound to an OS-assigned ephemeral port) without
  * ever needing a real, fixed production port.
  *
- * No `/customers` routes exist yet — Story 2.3 (`GET /customers/count`)
- * and Story 2.4 (`GET /customers/by-distance`) add them. This story only
- * wires the cross-cutting piece required by AD-8 (the centralized error
- * handler) so the scaffold itself is genuinely testable end-to-end before
- * any real route exists.
+ * Story 2.3 adds the first real route (`GET /customers/count`), mounted
+ * under `/customers`. Story 2.4 (`GET /customers/by-distance`) adds to
+ * the same router.
  *
  * Deliberately NOT here: a diagnostic throw-route to exercise the error
  * handler. An earlier revision added one gated by `NODE_ENV === 'test'`,
@@ -23,9 +21,17 @@
  * `errorHandler` — see that file.
  */
 import express from 'express';
+import { pool } from './db/pool.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { createCustomersRouter } from './routes/customersRoutes.js';
 
 export const app = express();
+
+// The singleton pool (DATABASE_URL, the dev DB) — production wiring only.
+// Integration tests build their own router via createCustomersRouter(),
+// bound to a TEST_DATABASE_URL pool instead (AD-9); see
+// test/integration/customersCount.test.ts.
+app.use('/customers', createCustomersRouter(pool));
 
 // Must be registered LAST: Express identifies error-handling middleware by
 // its 4-argument signature, and only middleware/routes registered before
