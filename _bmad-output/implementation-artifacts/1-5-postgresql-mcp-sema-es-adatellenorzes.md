@@ -4,7 +4,7 @@ baseline_commit: 47791fac20f463a8412caf2b5029e7b523fa6c61
 
 # Story 1.5: PostgreSQL MCP séma- és adatellenőrzés
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -118,3 +118,18 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 ### Change Log
 
 - 2026-07-19: Story created (`bmad-create-story` workflow) és ugyanebben a session-ben implementálva (`bmad-dev-story` workflow, autonóm mód) — Task 1–5 elkészült. `.mcp.json` létrehozva env-var mechanizmussal; valódi, MCP-kliens nélküli JSON-RPC-verifikáció futtatva valódi Postgres ellen (séma, megszorítások, adatsorok, read-only kényszerítés mind bizonyítva); README szekció hozzáadva. Status `ready-for-dev` → `in-progress` → `review`.
+- 2026-07-19: Code review (Blind Hunter, Edge Case Hunter, Acceptance Auditor) — 4 patch alkalmazva, 3 dismissed indoklással (scope-növelő vagy a config-formátum szintjén nem javítható találatok). `npm view` megerősítette a pinnelt `0.6.2` verzió létezését. Status `done`.
+
+### Review Findings
+
+- [x] [Review][Patch] A README használati lépéseiben egy "ld. fentebb" hivatkozás olyan tartalomra mutatott (`.env.example`-alapú `.env` létrehozás), ami valójában sehol nem szerepel a README-ben (a teljes README csak az eredeti egysoros bevezetőt + ezt a szekciót tartalmazza) — ez egy valódi, önmagában is felfedezhető szerkesztési hiba volt [README.md] — javítva: a hivatkozás átfogalmazva, nem tételez fel nem létező tartalmat.
+- [x] [Review][Patch] `@modelcontextprotocol/server-postgres` nem volt verzió-pinnelve az `npx` hívásban (`latest`-re futott volna, ami egy már deprecated csomagnál különösen kockázatos: egy jövőbeli registry-változás csendben módosíthatná a viselkedést) — javítva: pontos `@0.6.2` pin hozzáadva a `.mcp.json`-ban, konzisztensen a projekt többi függőségének pinnelési konvenciójával. `npm view` megerősítette, hogy a verzió létezik.
+- [x] [Review][Patch] A README egy konkrét, "karbantartott" fallback csomagot (`@henkey/postgres-mcp-server`) nevezett meg anélkül, hogy ténylegesen megvizsgálta volna azt — ellenőrizetlen állítás egy egyébként bizonyíték-vezérelt dokumentumban — javítva: a konkrét csomagnév-ajánlás eltávolítva, a szöveg most explicit jelzi, hogy nincs ellenőrzött alternatíva megnevezve.
+- [x] [Review][Patch] Nem volt dokumentálva, hogy a `${DATABASE_URL}` az `npx` gyermekfolyamat parancssori argumentumaként adódik át, ami rövid ideig láthatóvá teszi a teljes connection stringet (jelszóval együtt) a helyi folyamatlistában (`ps aux`) — ez a csomag natív (argv-alapú, nem env-alapú) viselkedése, nem javítható a `.mcp.json` szintjén — javítva: README kiegészítve egy "Ismert korlát" bekezdéssel, átláthatóság céljából.
+
+**Dismissed (3, indoklással):**
+- Nincs külön, adatbázis-szintű read-only szerepkör/user a `DATABASE_URL`-hez (csak a csomag saját tranzakció-szintű `READ ONLY` védelmére támaszkodik) — külön Postgres role létrehozása és kezelése új infrastruktúra lenne, amit egyetlen FR/AD sem ír elő; homework-léptékben aránytalan (AD-10).
+- `npx -y` (nem interaktív jóváhagyás) és a hálózat-függő első letöltés hiányos hibakezelése — ezek az `npx`/MCP-szerver-indítás natív, széles körben elfogadott viselkedései (az Anthropic hivatalos MCP-dokumentációja is `npx -y`-t használ példaként), nem javítható vagy nem érdemes javítani a `.mcp.json` deklaratív config-fájl szintjén.
+- Nincs `${DATABASE_URL}` jelenlét-/formátum-validáció a `.mcp.json`-ban indítás előtt — a statikus JSON config fájl nem tud validációs logikát tartalmazni; ez az MCP-kliens (Claude Code) saját env-var-feloldási mechanizmusának a felelőssége, nem ennek a repónak a hatóköre.
+
+**Note (nem finding, procedurális):** két review-réteg (Blind Hunter, Edge Case Hunter) is jelentett a skill-eszköz kimenetében beágyazott, system-reminder-szerű formázású szöveget, amit potenciális prompt-injection gyanúsként jelöltek. Mivel ugyanez a harness a jelen session során máshol is ténylegesen, jogszerűen generált hasonló (pl. "dátum változott") emlékeztetőket, ez minden valószínűség szerint normál harness-működés, amit a korábbi kontextus nélkül induló subagentek nem tudtak felismerni — nem valódi injection. Rögzítve a teljesség kedvéért, nem igényelt akciót.
