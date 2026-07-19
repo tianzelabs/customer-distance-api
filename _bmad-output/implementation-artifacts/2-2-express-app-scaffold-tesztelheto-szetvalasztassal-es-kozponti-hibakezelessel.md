@@ -4,7 +4,7 @@ baseline_commit: 807c29ba990ec0fba7d9825d76cb0037e47d51da
 
 # Story 2.2: Express app-scaffold tesztelhető szétválasztással és központi hibakezeléssel
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -125,7 +125,7 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 - AC #3: not re-implemented — `src/config/env.ts`'s fail-fast `DATABASE_URL`/`PORT` validation was already built and tested in Story 1.4; this story only consumes `env.port` in `server.ts`. Confirmed by reading the current `env.ts` (Story 1.4 post-review-fix state: `env: { databaseUrl, port }`, `requireTestDatabaseUrl()`) before writing `server.ts` — no changes needed or made to `env.ts`.
 - AC #4 verified two ways (documented `[ASSUMPTION]` in Dev Notes explains why both, not just one):
   - Unit-level (`test/unit/errorHandler.test.ts`, 4 tests): direct calls into `errorHandler()` with mock `req`/`res`/`next` confirm (a) exact `{"error":{"message":"Internal server error"}}` body + HTTP 500 for a normal `Error`; (b) a deliberately secret-bearing error message (`"password=super-secret connection string leaked here"`) never appears in the serialized response body; (c) `console.error` is called exactly once with a `[api]`-prefixed first argument and the *actual* error object (not a sanitized copy) as the second argument — proving server-side logging retains full diagnostic detail while the client response does not; (d) a non-`Error` thrown value (plain string) is handled without the handler itself throwing.
-  - End-to-end (`test/integration/app.test.ts`, 1 of its 2 tests): a real HTTP `fetch` to the `NODE_ENV=test`-gated `/__test/throw` diagnostic route returns HTTP 500, `Content-Type: application/json`, and body exactly `{"error":{"message":"Internal server error"}}` — proving Express 5's automatic sync-throw-to-error-middleware forwarding is actually wired correctly in `app.ts`, not just that the middleware function behaves correctly in isolation.
+  - End-to-end (`test/integration/app.test.ts`, post-code-review revision): a synthetic, throwaway Express instance built locally inside the test file (NOT the production `app`) — wired with the real, imported `errorHandler` — proves both a synchronous route throw and an async/rejected-promise route error are forwarded to the centralized handler over real HTTP, returning HTTP 500 / `Content-Type: application/json` / body exactly `{"error":{"message":"Internal server error"}}`. The original revision instead put a `NODE_ENV=test`-gated diagnostic route directly inside `src/app.ts`; code review flagged that as test-only concern leaking into production source and it was removed (see Review Findings below).
 - 404 behavior documented, not custom-implemented (AD-10, AC's don't require a custom 404): Express 5's built-in default (via `finalhandler`) returns HTTP 404, `Content-Type: text/html; charset=utf-8`, body `Cannot GET <path>` — confirmed both by the integration test (`test/integration/app.test.ts`) and by the manual curl against the real running server.
 - Express version verified current via `npm view express dist-tags` (2026-07-19): `latest: '5.2.1'`, exact match to `ARCHITECTURE-SPINE.md#Stack` — no discrepancy, unlike Story 1.2's `node-pg-migrate` finding.
 - Scope discipline: did not add `GET /customers/count` or `GET /customers/by-distance` (2.3/2.4), did not create `src/routes/customersRoutes.ts` content (`src/routes/.gitkeep` untouched — still empty), did not modify `src/config/env.ts` (only consumed `env.port`), did not add `supertest` or any other new runtime/test dependency, did not implement a custom JSON 404 handler.
@@ -140,10 +140,15 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 - `test/unit/errorHandler.test.ts`
 - `test/integration/app.test.ts`
 
-**Modified:**
+**Modified (implementation + code review):**
 - `package.json` (added `express@5.2.1` dependency, `@types/express@5.0.6` devDependency, both exact-pinned)
 - `package-lock.json`
-- `_bmad-output/implementation-artifacts/sprint-status.yaml` (`2-2-...`: `backlog` → `ready-for-dev` → `in-progress` → `review`; `last_updated: 2026-07-19`)
+- `src/app.ts` (diagnostic throw-route removed, per review)
+- `src/middleware/errorHandler.ts` (`headersSent` guard, request-context logging, per review)
+- `src/server.ts` (`.listen(...).on('error', ...)`, per review)
+- `test/integration/app.test.ts` (rewritten: synthetic throwaway app for error-forwarding tests, sync+async coverage, per review)
+- `test/unit/errorHandler.test.ts` (new mock-request helper, 2 new tests, per review)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (`2-2-...`: `backlog` → `ready-for-dev` → `in-progress` → `review` → `done`; `last_updated: 2026-07-19`)
 
 **Removed:**
 - `src/middleware/.gitkeep` (superseded by the real `errorHandler.ts`)
@@ -152,3 +157,22 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 - 2026-07-19: Story created (`bmad-create-story` workflow), Status `ready-for-dev`.
 - 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode) — Tasks 1-7 completed. Installed `express@5.2.1`/`@types/express@5.0.6` (exact pins, no version discrepancy vs. Architecture Spine). Implemented `src/app.ts` (unbound app + `NODE_ENV=test`-gated diagnostic throw-route), `src/server.ts` (`.listen(env.port)`), `src/middleware/errorHandler.ts` (fixed `{"error":{"message":"Internal server error"}}`/500 shape, `[api]`-prefixed server-side logging). Added `test/unit/errorHandler.test.ts` (4 direct-call tests) and `test/integration/app.test.ts` (2 real-HTTP tests via ephemeral port: 404 default behavior, end-to-end error-handler wiring). All 4 ACs verified. `npm run test:unit`: 48/48. `npm test`: 53/53 (real Postgres). Manual verification: real server started via `tsx src/server.ts`, curled, confirmed `.listen()` works end-to-end, then stopped. Status `in-progress` → `review`.
+- 2026-07-19: Code review (Blind Hunter, Edge Case Hunter, Acceptance Auditor) — all three layers independently converged on the same central finding (the `NODE_ENV=test`-gated diagnostic route living in production source). 5 patches applied, 8 dismissed with reasoning. `npm run test:unit`: 50/50. `npm test`: 56/56 (real Postgres). Manual re-verification: server restarted, curled, still works. Status `done`.
+
+### Review Findings
+
+- [x] [Review][Patch] **(Major, all 3 review layers flagged this independently)** A diagnostic route that always throws lived permanently inside `src/app.ts` (production source), gated only by `process.env.NODE_ENV === 'test'` — a single ambient env-var check with no secondary safeguard. If `NODE_ENV=test` were ever set in a non-test context (CI smoke-test stage, a misconfigured deploy, certain PaaS defaults), an unauthenticated, always-500 endpoint would become live — fixed: the route removed entirely from `src/app.ts`. `test/integration/app.test.ts` now proves the same claim (Express 5 forwards both a sync throw and an async rejection to the centralized error handler, over real HTTP) using a throwaway Express instance built locally inside the test file, wired with the real, imported `errorHandler` — zero test-conditional branching ever ships in production code, and async-rejection forwarding is now explicitly tested too (the original only covered the sync-throw path).
+- [x] [Review][Patch] `errorHandler` never checked `res.headersSent` before calling `res.status().json(...)` — if a downstream handler had already started writing a response, this would throw a secondary "Cannot set headers after they are sent" error, crashing the request instead of degrading gracefully (a standard requirement for any custom Express final error handler) — fixed: added the guard, delegating to `next(err)` when headers are already sent. New unit test added.
+- [x] [Review][Patch] The centralized error log (`console.error('[api] Unhandled error:', err)`) dropped request context — no `req.method`/`req.originalUrl` — making it hard to tell which call actually failed once there's more than one route — fixed: log now includes both. New unit test added.
+- [x] [Review][Patch] `server.ts`'s `app.listen(...)` had no error handling — a bind failure (e.g. `EADDRINUSE`) would surface as a raw, unlabeled Node exception instead of this project's own `[api]`-prefixed logging convention used everywhere else — fixed: added an `.on('error', ...)` handler that logs via the same convention and sets a non-zero exit code.
+- [x] [Review][Patch] Unit tests passed a bare `{} as Request` with no `method`/`originalUrl`, which would no longer meaningfully exercise the new request-context logging — fixed: replaced with a `createMockRequest()` helper returning realistic values.
+
+**Dismissed (8, with reasoning):**
+- No graceful shutdown (SIGTERM/SIGINT) handling in `server.ts` — genuinely out of scope: this project has no production deployment (PRD Non-Goals), AD-10 anti-over-engineering.
+- Express/`@types/express` pinned exact while `@types/node` floats — matches the project's established, documented convention (load-bearing framework/tooling choices get exact pins per `ARCHITECTURE-SPINE.md`'s Stack table; `@types/node` was explicitly exempted back in Story 1.1), not an inconsistency.
+- 404 test asserts on Express's internal default `content-type`/non-empty-body behavior — acceptable, already mitigated: the test explicitly avoids an exact string match specifically to reduce coupling to Express's internal wording (per its own code comment).
+- Test doubles use `as Request`/`as Response` casts, bypassing full type safety — standard, ubiquitous pattern for mocking framework types in TypeScript tests, not a real defect.
+- No explicit assertion on `errorHandler`'s 4-argument arity — already robustly, implicitly proven: the real integration test relies on Express's arity-based dispatch actually working over real HTTP, which is stronger evidence than a static `.length` check.
+- `process.env.NODE_ENV` read directly rather than through `env.ts` — moot after removing the diagnostic route; `app.ts` no longer reads `NODE_ENV` at all.
+- File List claims `package-lock.json`/`sprint-status.yaml` modified but they weren't in the reviewed diff excerpt — same recurring, already-established pattern: verified present via `git diff --stat` on the actual commits, just trimmed from the review diff for size.
+- No coverage for non-GET methods on the diagnostic route — moot, the route no longer exists.

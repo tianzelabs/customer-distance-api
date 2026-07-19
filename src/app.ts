@@ -11,26 +11,21 @@
  * wires the cross-cutting piece required by AD-8 (the centralized error
  * handler) so the scaffold itself is genuinely testable end-to-end before
  * any real route exists.
+ *
+ * Deliberately NOT here: a diagnostic throw-route to exercise the error
+ * handler. An earlier revision added one gated by `NODE_ENV === 'test'`,
+ * but code review flagged that as test-only concern leaking into
+ * production source (a permanently-shipped, unauthenticated,
+ * always-throws route with no safeguard beyond one ambient env-var
+ * check). The error-forwarding mechanism is proven instead by a
+ * throwaway Express instance built locally inside
+ * test/integration/app.test.ts, reusing this project's real
+ * `errorHandler` — see that file.
  */
-import express, { type Request, type Response } from 'express';
+import express from 'express';
 import { errorHandler } from './middleware/errorHandler.js';
 
 export const app = express();
-
-// Diagnostic-only route: intentionally throws, so integration tests can
-// prove the full chain end-to-end (route throws -> Express 5 auto-forwards
-// to the centralized error middleware -> fixed {"error":...} shape, HTTP
-// 500) via a real HTTP call, not just a direct unit-level call into
-// errorHandler(). Registered ONLY when running under the test runner
-// (Vitest sets NODE_ENV=test by default, verified during this story's
-// implementation) — never in production, and never a stand-in for the
-// real /customers routes that Stories 2.3/2.4 own. See Story 2.2 Dev
-// Notes for the rationale.
-if (process.env.NODE_ENV === 'test') {
-  app.get('/__test/throw', (_req: Request, _res: Response) => {
-    throw new Error('diagnostic error for centralized error handler test');
-  });
-}
 
 // Must be registered LAST: Express identifies error-handling middleware by
 // its 4-argument signature, and only middleware/routes registered before

@@ -11,6 +11,14 @@
 import { app } from './app.js';
 import { env } from './config/env.js';
 
-app.listen(env.port, () => {
-  console.log(`[api] Listening on port ${env.port}`);
-});
+app
+  .listen(env.port, () => {
+    console.log(`[api] Listening on port ${env.port}`);
+  })
+  .on('error', (err: NodeJS.ErrnoException) => {
+    // Without this, a bind failure (e.g. EADDRINUSE) surfaces as a raw,
+    // unlabeled Node exception instead of the project's own [api]-prefixed
+    // logging convention used everywhere else.
+    console.error(`[api] Failed to start listening on port ${env.port}:`, err);
+    process.exitCode = 1;
+  });
