@@ -24,7 +24,7 @@
  */
 import { Router } from 'express';
 import type { Queryable } from '../repositories/customersRepository.js';
-import { getCustomerCount } from '../services/customersService.js';
+import { getCustomerCount, getCustomersByDistance } from '../services/customersService.js';
 
 export function createCustomersRouter(db: Queryable): Router {
   const router = Router();
@@ -32,6 +32,17 @@ export function createCustomersRouter(db: Queryable): Router {
   router.get('/count', async (_req, res) => {
     const count = await getCustomerCount(db);
     res.json({ count });
+  });
+
+  // Bare JSON array (not wrapped in an envelope object) — Consistency
+  // Conventions/FR-7. Each element is whatever assembleCustomersWithDistance
+  // produced: `budget`/`note`/`countryCode` already omitted (not
+  // explicit null) when unset, `distanceKm` always present. No
+  // additional shaping needed here — res.json() serializes the service
+  // layer's result as-is.
+  router.get('/by-distance', async (_req, res) => {
+    const customers = await getCustomersByDistance(db);
+    res.json(customers);
   });
 
   return router;
