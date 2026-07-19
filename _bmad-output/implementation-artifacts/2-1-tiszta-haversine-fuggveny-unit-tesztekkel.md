@@ -4,7 +4,7 @@ baseline_commit: fd9dc19dc7f813227c7dec3f12555feeca957fb
 
 # Story 2.1: Tiszta Haversine-függvény unit tesztekkel
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -24,26 +24,26 @@ hogy a távolságszámítás helyessége az API-tól függetlenül garantált le
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — `src/services/haversine.ts`: tiszta Haversine-függvény (AC: #1, #2, #3, #4)**
-  - [ ] Importáld a `BUDAPEST_REF` konstanst és a `TownCoordinate` típust a `../geocoding/townReference.js`-ből (ESM/`NodeNext` konvenció: explicit `.js` kiterjesztés a relatív TS importban — ld. Story 1.1/1.3 tanulsága).
-  - [ ] Definiáld a függvényt két, `TownCoordinate | null` típusú paraméterrel (`from`, `to`), ahol `to` alapértelmezett értéke `BUDAPEST_REF` (a domain-igény — FR-8 — mindig Budapesthez viszonyít; az alapértelmezett paraméter azt is kielégíti, hogy maga a `haversine.ts` fájl importálja és ténylegesen használja a `BUDAPEST_REF`-et, nem csak a jövőbeli hívó).
-  - [ ] Implementáld a szabvány Haversine-képletet (Föld sugár ≈ 6371 km), `Math.sin`/`Math.cos`/`Math.atan2`/`Math.sqrt`, fokból radiánba konvertálással.
-  - [ ] Ha `from === null` vagy a felbontott `to === null`, a függvény `null`-t ad vissza — nem dob kivételt.
-  - [ ] Ne implementálj kerekítést (1 tizedesjegyre kerekítés a válaszban — FR-8 "consequences" pont — a 2.4 story service-rétegének felelőssége, nem ezé a pure function-é).
-  - [ ] Ne hozz létre `src/services/customersService.ts`-t, ne nyúlj `src/app.ts`/`server.ts`/route-okhoz (2.2/2.3/2.4 hatóköre).
+- [x] **Task 1 — `src/services/haversine.ts`: tiszta Haversine-függvény (AC: #1, #2, #3, #4)**
+  - [x] Importáld a `BUDAPEST_REF` konstanst és a `TownCoordinate` típust a `../geocoding/townReference.js`-ből (ESM/`NodeNext` konvenció: explicit `.js` kiterjesztés a relatív TS importban — ld. Story 1.1/1.3 tanulsága).
+  - [x] Definiáld a függvényt két, `TownCoordinate | null` típusú paraméterrel (`from`, `to`), ahol `to` alapértelmezett értéke `BUDAPEST_REF` (a domain-igény — FR-8 — mindig Budapesthez viszonyít; az alapértelmezett paraméter azt is kielégíti, hogy maga a `haversine.ts` fájl importálja és ténylegesen használja a `BUDAPEST_REF`-et, nem csak a jövőbeli hívó).
+  - [x] Implementáld a szabvány Haversine-képletet (Föld sugár ≈ 6371 km), `Math.sin`/`Math.cos`/`Math.atan2`/`Math.sqrt`, fokból radiánba konvertálással.
+  - [x] Ha `from === null` vagy a felbontott `to === null`, a függvény `null`-t ad vissza — nem dob kivételt.
+  - [x] Ne implementálj kerekítést (1 tizedesjegyre kerekítés a válaszban — FR-8 "consequences" pont — a 2.4 story service-rétegének felelőssége, nem ezé a pure function-é).
+  - [x] Ne hozz létre `src/services/customersService.ts`-t, ne nyúlj `src/app.ts`/`server.ts`/route-okhoz (2.2/2.3/2.4 hatóköre).
 
-- [ ] **Task 2 — Unit tesztek (AC: #5)**
-  - [ ] Hozd létre a `test/unit/haversine.test.ts`-t.
-  - [ ] Teszt: Budapest (`BUDAPEST_REF`) → Bécs (`townReference.ts` `vienna` bejegyzése, `{lat: 48.2082, lon: 16.3738}`) ≈ 214 km, ±1 km tolerancián belül (számított referenciaérték: ≈214.04 km — ellenőrizve független Python-implementációval a story-készítés során).
-  - [ ] Teszt: Budapest → Budapest (mindkét paraméter `BUDAPEST_REF`) === 0 (pontos egyenlőség, nem tolerancia-alapú).
-  - [ ] Teszt: `null` bemenet mindkét pozícióban (`from = null`, `to = null`, mindkettő `null`) → `null`-t ad vissza, nem dob kivételt.
-  - [ ] Kiegészítő józanság-tesztek (nem FR-9 kötelező eset, de olcsó és értékes): szimmetria (`haversine(A, B) === haversine(B, A)`); alapértelmezett `to` paraméter (`haversine(vienna)` ugyanazt adja, mint `haversine(vienna, BUDAPEST_REF)`); egy harmadik, független várospár (Budapest–München, `townReference.ts` `munich` bejegyzése) egy előre kiszámított, tolerált értékkel (≈561.15 km ±1 km).
-  - [ ] Futtasd: `npm run test:unit` — minden tesztnek zöldnek kell lennie; rögzítsd a valódi pass-számot a Dev Agent Record-ban.
+- [x] **Task 2 — Unit tesztek (AC: #5)**
+  - [x] Hozd létre a `test/unit/haversine.test.ts`-t.
+  - [x] Teszt: Budapest (`BUDAPEST_REF`) → Bécs (`townReference.ts` `vienna` bejegyzése, `{lat: 48.2082, lon: 16.3738}`) ≈ 214 km, ±1 km tolerancián belül (számított referenciaérték: ≈214.04 km — ellenőrizve független Python-implementációval a story-készítés során).
+  - [x] Teszt: Budapest → Budapest (mindkét paraméter `BUDAPEST_REF`) === 0 (pontos egyenlőség, nem tolerancia-alapú).
+  - [x] Teszt: `null` bemenet mindkét pozícióban (`from = null`, `to = null`, mindkettő `null`) → `null`-t ad vissza, nem dob kivételt.
+  - [x] Kiegészítő józanság-tesztek (nem FR-9 kötelező eset, de olcsó és értékes): szimmetria (`haversine(A, B) === haversine(B, A)`); alapértelmezett `to` paraméter (`haversine(vienna)` ugyanazt adja, mint `haversine(vienna, BUDAPEST_REF)`); egy harmadik, független várospár (Budapest–München, `townReference.ts` `munich` bejegyzése) egy előre kiszámított, tolerált értékkel (≈561.15 km ±1 km).
+  - [x] Futtasd: `npm run test:unit` — minden tesztnek zöldnek kell lennie; rögzítsd a valódi pass-számot a Dev Agent Record-ban.
 
-- [ ] **Task 3 — Story-dokumentáció és delivery (delivery norma, NFR7)**
-  - [ ] Frissítsd ezt a story fájlt: Tasks pipálása, Dev Agent Record kitöltése, Status `ready-for-dev` → `in-progress` → `review`.
-  - [ ] Frissítsd a `sprint-status.yaml`-t: `epic-2` `backlog` → `in-progress`; `2-1-tiszta-haversine-fuggveny-unit-tesztekkel` `backlog` → `ready-for-dev` → `in-progress` → `review`.
-  - [ ] Kis, fókuszált commitok: (1) story-fájl létrehozása, (2) `haversine.ts` implementáció + unit tesztek együtt (kicsi, kohéz egység — nincs értelme szétbontani implementáció és teszt között, mivel egyetlen fájlpár).
+- [x] **Task 3 — Story-dokumentáció és delivery (delivery norma, NFR7)**
+  - [x] Frissítsd ezt a story fájlt: Tasks pipálása, Dev Agent Record kitöltése, Status `ready-for-dev` → `in-progress` → `review`.
+  - [x] Frissítsd a `sprint-status.yaml`-t: `epic-2` `backlog` → `in-progress`; `2-1-tiszta-haversine-fuggveny-unit-tesztekkel` `backlog` → `ready-for-dev` → `in-progress` → `review`.
+  - [x] Kis, fókuszált commitok: (1) story-fájl létrehozása, (2) `haversine.ts` implementáció + unit tesztek együtt (kicsi, kohéz egység — nincs értelme szétbontani implementáció és teszt között, mivel egyetlen fájlpár).
 
 ## Dev Notes
 
@@ -83,10 +83,46 @@ hogy a távolságszámítás helyessége az API-tól függetlenül garantált le
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 ### Debug Log References
 
+- Independent Python Haversine cross-check (story-creation time, R=6371 km): Budapest↔Vienna = 214.044 km; Budapest↔Munich = 561.152 km — used to set the test tolerances in `haversine.test.ts` (±1 km each) without relying on memorized real-world figures.
+- `npx tsc --noEmit` after writing `src/services/haversine.ts` — clean, no type errors (`TownCoordinate | null` default-parameter typing checked out under `strict: true`).
+- `npm run test:unit` (`vitest run test/unit`) executed for real: **4 test files passed, 44 tests passed** (35 pre-existing + 9 new in `haversine.test.ts`), ~192ms duration.
+- `npm test` (`vitest run`, unit+integration together, real Postgres running on port 5433 via `docker ps`) executed for real: **5 test files passed, 47 tests passed** (44 unit + 3 integration in `test/integration/seed.test.ts`), ~242ms duration. Confirms this story's addition did not regress the integration suite.
+  ```
+  RUN  v4.1.10 .../customer-distance-api
+   Test Files  5 passed (5)
+        Tests  47 passed (47)
+     Start at  13:40:13
+     Duration  242ms
+  ```
+
 ### Completion Notes List
 
+- AC #1/#4 verified: `src/services/haversine.ts` is a pure function (`TownCoordinate | null` in, `number | null` out), no DB/HTTP/I/O import — only `../geocoding/townReference.js` for `BUDAPEST_REF`/`TownCoordinate` (AD-6, AD-13). `npx tsc --noEmit` clean.
+- AC #1 verified with the project's own Vienna coordinate (`townReference.ts`'s `vienna` entry, `{lat: 48.2082, lon: 16.3738}`, not a second hand-typed copy): Budapest↔Vienna = 214.044 km, well inside the ±1 km tolerance test (asserted as `[213, 215]`).
+- AC #2 verified: `haversineDistanceKm(BUDAPEST_REF, BUDAPEST_REF)` returns exactly `0` (exact equality, not a tolerance range).
+- AC #3 verified: `null` in either position (`from`, `to`, or both) returns `null` and does not throw — tested with `expect(...).not.toThrow()` plus `toBeNull()`, three separate call shapes.
+- AC #4 / AD-13 verified: the file imports `BUDAPEST_REF` (used as the `to` parameter's default value) rather than redefining a Budapest coordinate. `[ASSUMPTION]` documented in Dev Notes: the function stays generic/two-argument (required by AC #2's "as both parameters" phrasing) while still satisfying the "the file imports BUDAPEST_REF" Given-clause via a default parameter — this also means Story 2.4's `customersService.ts` can call `haversineDistanceKm(customerCoord)` without needing its own `BUDAPEST_REF` import.
+- AC #5 verified: `test/unit/haversine.test.ts` covers exactly FR-9's three required cases plus three low-cost sanity checks (symmetry, default-parameter equivalence, an independent third city pair Budapest↔Munich with a pre-computed ±1 km tolerance). `npm run test:unit` — **44/44 passing**; full-suite `npm test` — **47/47 passing** (real Postgres, no regression).
+- Scope discipline: did not create `src/services/customersService.ts`, did not touch `src/app.ts`/`server.ts`/routes (2.2/2.3/2.4's scope), did not implement response rounding or sorting (2.4's scope — this function returns the raw float).
+- `src/services/.gitkeep` removed (superseded by the real `haversine.ts`, same pattern as Story 1.3's `test/unit/.gitkeep` removal).
+
 ### File List
+
+**New:**
+- `src/services/haversine.ts`
+- `test/unit/haversine.test.ts`
+
+**Modified:**
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (`epic-2`: `backlog` → `in-progress`; `2-1-tiszta-haversine-fuggveny-unit-tesztekkel`: `backlog` → `ready-for-dev` → `in-progress` → `review`; `last_updated: 2026-07-19`)
+
+**Removed:**
+- `src/services/.gitkeep` (superseded by the real `haversine.ts`)
+
+### Change Log
+
+- 2026-07-19: Story created (`bmad-create-story` workflow), Status `ready-for-dev`.
+- 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode) — Tasks 1-3 completed. `src/services/haversine.ts` (generic two-coordinate Haversine function with `BUDAPEST_REF`-defaulted second parameter) and `test/unit/haversine.test.ts` (9 tests: 3 FR-9-required + 3 sanity checks, using real project coordinates) implemented and run for real (44/44 unit, 47/47 full suite). All 5 ACs verified. Status `in-progress` → `review`.
