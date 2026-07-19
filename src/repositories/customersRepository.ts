@@ -4,9 +4,9 @@
  * single source of the `Customer` TS type (AD-14) — every other layer
  * that needs the shape imports it from this module, never redeclares it.
  *
- * Story 1.4 introduces `upsertCustomer()` only (the seed's write path);
- * `findAll()`/`count()` (the query endpoints' read path) are added by
- * Stories 2.3/2.4.
+ * Story 1.4 introduces `upsertCustomer()` (the seed's write path).
+ * Story 2.3 adds `countCustomers()` (the `GET /customers/count` read
+ * path); `findAll()` (the `by-distance` read path) is added by Story 2.4.
  */
 import type { Pool, PoolClient } from 'pg';
 
@@ -37,9 +37,11 @@ export interface UpsertCustomerInput {
  * Any object that can run a parameterized query — either the shared
  * Pool or a checked-out PoolClient. Accepting this (rather than only
  * `Pool`) lets callers inject a test-DB-bound Pool (AD-9) without this
- * module knowing or caring which one it got.
+ * module knowing or caring which one it got. Exported so the service
+ * layer (`customersService.ts`) can accept the same shape without
+ * redeclaring it (single source of the contract, same spirit as AD-14).
  */
-type Queryable = Pool | PoolClient;
+export type Queryable = Pool | PoolClient;
 
 /**
  * Inserts a customer, or refreshes its mutable columns if a row with
@@ -70,4 +72,31 @@ export async function upsertCustomer(db: Queryable, input: UpsertCustomerInput):
       input.countryCode ?? null,
     ],
   );
+}
+
+/**
+ * Converts `pg`'s string-typed `COUNT(*)` result to a validated `number`
+ * (Consistency Conventions: `pg` returns `COUNT(*)`/`BIGSERIAL` columns as
+ * strings because Postgres's `bigint`/`count` is 64-bit and JS `number`
+ * is only safely precise up to 2^53-1 — the repository must explicitly
+ * coerce and validate before returning). Pure and DB-independent, so it
+ * is unit-testable without a live Postgres connection.
+ */
+export function parseCountResult(raw: string): number {
+  const value = Number(raw);
+  if (!Number.isFinite(value) || !Number.isSafeInteger(value)) {
+    throw new Error(`[database] COUNT(*) returned a value that is not a safe, finite integer: "${raw}"`);
+  }
+  return value;
+}
+
+/**
+ * Returns the real number of rows currently in `customers` via a static,
+ * parameter-free `SELECT COUNT(*)` — no dynamic value to bind, so this
+ * is exempt from the parameterized-query requirement (AD-2/addendum.md
+ * exemption for static, parameter-free `SELECT`s).
+ */
+export async function countCustomers(db: Queryable): Promise<number> {
+  const result = await db.query<{ count: string }>('SELECT COUNT(*) FROM customers');
+  return parseCountResult(result.rows[0].count);
 }
