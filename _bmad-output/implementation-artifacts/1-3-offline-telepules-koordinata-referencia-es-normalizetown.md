@@ -4,7 +4,7 @@ baseline_commit: a0b04021db985908a5c02ad4d270deac405c555f
 
 # Story 1.3: Offline település-koordináta referencia és `normalizeTown()`
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -102,6 +102,45 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 ### Debug Log References
 
+- `npm view vitest dist-tags` (2026-07-19): `latest: 4.1.10`, `beta: 5.0.0-beta.6` — confirmed the Stack table's `4.1.x`/"5.0 is still beta" claim is current, no drift (unlike the `node-pg-migrate` currency note in Story 1.2). Installed `vitest@4.1.10` exact via `--save-exact`, same pinning convention as `typescript`/`node-pg-migrate`/`pg`.
+- `npm install --save-dev --save-exact vitest@4.1.10` emitted the expected `EBADENGINE` warning (local Node v23.5.0 vs. declared `>=24`) — same non-blocking warning pattern documented in Story 1.1/1.2, not a new issue.
+- `npx tsc --noEmit` run after writing `src/geocoding/normalizeTown.ts` and `townReference.ts` — clean, no type errors, first time `strict: true` applies to real source in this repo.
+- `npm test` (`vitest run`) executed for real against the two new test files: **2 test files passed, 32 tests passed**, ~152ms duration. Full output:
+  ```
+  RUN  v4.1.10 .../customer-distance-api
+   Test Files  2 passed (2)
+        Tests  32 passed (32)
+     Start at  12:51:25
+     Duration  152ms (transform 41ms, setup 0ms, import 59ms, tests 11ms, environment 0ms)
+  ```
+
 ### Completion Notes List
 
+- AC #1/#2 verified: `src/geocoding/townReference.ts` contains exactly the 15 seed towns (Budapest, Vienna, Munich, Milan, Barcelona, Lyon, Kraków, Prague, Lisbon, Amsterdam, Stockholm, Ljubljana, Bucharest, Dublin, Copenhagen) as normalized-key entries, with real, publicly-known city-center lat/lon (4 decimal places). The `budapest` entry's value IS the `BUDAPEST_REF` constant (same object reference, not a literal copy) — verified with `toBe()` (referential equality), not just `toEqual()`, in `test/unit/townReference.test.ts`.
+- AC #3/#4 verified: `normalizeTown()` is the single exported function in `src/geocoding/normalizeTown.ts`; no other file implements any part of trim/lowercase/diacritic-strip/whitespace-collapse. Diacritic stripping uses `String.prototype.normalize('NFD')` + a Unicode combining-mark regex (`̀-ͯ`), not a hardcoded character-substitution table, so it generalizes beyond the 15 seed towns' scripts.
+- AC #5/#6 verified: `lookupTownCoordinate()` returns `undefined` for an unknown town — proven with `expect(...).not.toThrow()` plus `toBeUndefined()`, not just an absence of a thrown-error test.
+- AC #7 — `[ASSUMPTION]` **implemented** the optional Budapest-district folding extra (see Dev Notes rationale): `"Budapest XIII."`, `"Budapest 13"`, and `"Budapest, XI. kerület"` all normalize to `"budapest"` and resolve to the exact `BUDAPEST_REF` object. Dedicated tests exist in both `normalizeTown.test.ts` (normalization-level) and `townReference.test.ts` (lookup-level, confirming referential equality to `BUDAPEST_REF`). A negative test (`"Budapest West"`) confirms the fold is not overly broad.
+- AC #8 verified: Vitest `4.1.10` installed exact-pinned; `"test": "vitest run"` (non-watch) added to `package.json`; `npm test` actually executed — **32/32 tests passed**, 0 failures. Full output captured in Debug Log above, not just claimed.
+- Scope discipline: did not touch `src/seed.ts` (1.4), did not implement unknown-town warning logging (1.4's job — this story only guarantees a clean `undefined` return), did not touch `.mcp.json` (1.5), did not touch Haversine (2.1) — confirmed `BUDAPEST_REF` is exported cleanly and typed (`TownCoordinate` interface) for 2.1 to import later.
+- `test/unit/.gitkeep` removed (real test files now occupy that directory); `test/integration/.gitkeep` left untouched (still empty, owned by Story 2.4).
+
 ### File List
+
+**New:**
+- `src/geocoding/townReference.ts`
+- `src/geocoding/normalizeTown.ts`
+- `test/unit/normalizeTown.test.ts`
+- `test/unit/townReference.test.ts`
+
+**Modified:**
+- `package.json` (added `vitest@4.1.10` devDependency, `"test": "vitest run"` script)
+- `package-lock.json`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (`1-3-offline-telepules-koordinata-referencia-es-normalizetown`: `backlog` → `ready-for-dev` → `in-progress` → `review`; `last_updated: 2026-07-19`)
+
+**Removed:**
+- `test/unit/.gitkeep` (superseded by real test files)
+
+### Change Log
+
+- 2026-07-19: Story created (`bmad-create-story` workflow), Status `ready-for-dev`.
+- 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode) — Tasks 1-5 completed. Vitest 4.1.10 installed, `townReference.ts` (15 towns + `BUDAPEST_REF`) and `normalizeTown.ts` (AD-12 entry point + optional Budapest-district folding) implemented, unit tests written and run for real (32/32 passing). All 8 ACs verified. Status `in-progress` → `review`.
