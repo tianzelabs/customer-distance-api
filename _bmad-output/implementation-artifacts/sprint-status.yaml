@@ -59,7 +59,7 @@ development_status:
   epic-2: in-progress
   2-1-tiszta-haversine-fuggveny-unit-tesztekkel: done
   2-2-express-app-scaffold-tesztelheto-szetvalasztassal-es-kozponti-hibakezelessel: done
-  2-3-get-customers-count: ready-for-dev
+  2-3-get-customers-count: review
   2-4-get-customers-by-distance: backlog
   epic-2-retrospective: optional
 

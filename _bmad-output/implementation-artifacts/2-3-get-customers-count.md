@@ -4,7 +4,7 @@ baseline_commit: ceee4bab03dc5ba5b7e42551a2a318961c33b9f2
 
 # Story 2.3: GET /customers/count
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -90,6 +90,41 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 ### Debug Log References
 
+- `npx tsc --noEmit` — clean after all implementation changes.
+- `npm test` (`vitest run`, real Postgres on port 5433): **9 test files passed, 65 tests passed** (56 pre-existing + 6 new in `customersRepository.test.ts` + 3 new in `customersCount.test.ts` = 65; one initially-written 7th unit case, `parseCountResult('')`, was removed — see below). Ran 3x consecutively to confirm no flakiness after the `vitest.config.ts` fix: 65/65, 65/65, 65/65.
+- **Cross-file DB race discovered and fixed:** first `npm test` run showed 2 failures — (a) a unit-test bug (`parseCountResult('')` does NOT throw, since `Number('')` is `0` in JS, a legitimate edge case that isn't actually reachable from `pg` — the test itself was wrong, removed), and (b) `test/integration/customersCount.test.ts`'s "empty table" case observed `count: 2` instead of `0`. Root-caused: Vitest runs test FILES in parallel by default, and `test/integration/seed.test.ts` (pre-existing) and the new `customersCount.test.ts` both `TRUNCATE`/`INSERT` into the SAME live `customers` table in `TEST_DATABASE_URL` — one file's setup interleaved with the other's assertions. Fixed by adding `vitest.config.ts` with `test.fileParallelism: false` (serializes file execution; each file's own per-test `TRUNCATE` in `beforeEach` still provides intra-file isolation as before). This is a pre-existing latent gap in the test suite's design that this story's new integration test exposed and fixed, not a change to any other story's test logic.
+- **Route dependency-injection design decision:** the route as first drafted imported the shared `pool` singleton (`db/pool.ts`, bound to `DATABASE_URL`) directly. Realized during implementation that this makes an HTTP-level integration test against `TEST_DATABASE_URL` impossible without either (a) mutating the dev DB via the real app, violating AD-9, or (b) NODE_ENV-branching inside `db/pool.ts`, repeating the exact anti-pattern Story 2.2's code review rejected (test-only concern leaking into production source). Resolved by having `src/routes/customersRoutes.ts` export a `createCustomersRouter(db: Queryable)` factory — the DB dependency is a plain function parameter (same pattern already used for repository functions' `Queryable` argument), not a DI framework/container (AD-10 compliant). `src/app.ts` calls it with the singleton `pool`; the integration test calls it with a `TEST_DATABASE_URL`-bound pool, reusing the exact same production route code and the exact same production `errorHandler`, mirroring the "synthetic app, real middleware" pattern Story 2.2 established for testing `errorHandler` without a production-only test route.
+- Manual end-to-end verification: started the real server (`npx tsx src/server.ts`, real `.env`, `PORT=3000`, real seeded dev DB with 15 real customers). Console: `[api] Listening on port 3000`. `curl -s -i http://localhost:3000/customers/count` → `HTTP/1.1 200 OK`, `Content-Type: application/json; charset=utf-8`, body `{"count":15}` — exact match to the real row count. Server then stopped (`pkill -f "tsx src/server.ts"`); follow-up curl confirmed connection refused.
+
 ### Completion Notes List
 
+- AC #1 verified: `GET /customers/count` returns `{"count": N}` where N comes from a genuine `SELECT COUNT(*) FROM customers` (`customersRepository.ts#countCustomers`), never a hardcoded value or `seed-customers.json`'s length. Proven three ways: (a) integration test against an empty `TEST_DATABASE_URL` table returns `{"count":0}`; (b) integration test with a fixture set of exactly 7 rows (deliberately ≠ 15, the real seed count) returns `{"count":7}`; (c) manual curl against the real seeded dev DB (15 real customers) returns `{"count":15}`.
+- AC #2 verified: `parseCountResult(raw: string): number` (pure, exported from `customersRepository.ts`) explicitly converts `pg`'s string-typed `COUNT(*)` result via `Number(...)` and validates `Number.isFinite` + `Number.isSafeInteger` before returning, throwing `[database] COUNT(*) returned a value that is not a safe, finite integer: "..."` otherwise. Isolated and unit-tested (6 cases: valid count, zero, `Number.MAX_SAFE_INTEGER` boundary, non-numeric string, unsafe-integer overflow, non-integer numeric string) without any DB dependency.
+- AC #3 verified: `src/routes/customersRoutes.ts` contains zero SQL — its handler calls `getCustomerCount(db)` (service layer) only. All SQL lives in `customersRepository.ts#countCustomers`.
+- AC #4 verified: `test/integration/customersCount.test.ts` runs against real (non-mocked) Postgres via `requireTestDatabaseUrl()` (AD-9, never falls back to `DATABASE_URL`), driving the real production route (`createCustomersRouter`) + real `errorHandler` over real HTTP on an OS-assigned ephemeral port. Covers: empty table (0 rows), a known non-15 fixture count (7 rows), and a JSON-number-type check on the response body.
+- AD-1 layering decision (documented per story's explicit instruction to decide and document): added a genuinely thin pass-through `src/services/customersService.ts#getCustomerCount()` even though a bare `COUNT(*)` has no real business logic to compute — AD-1's Rule text is unconditional ("route calls service functions only, service calls repository functions only"), and Story 2.4 will extend this same module with real logic (distanceKm assembly, rounding, sort), so introducing the layer now avoids a later route-level refactor.
+- Scope discipline: did not implement `GET /customers/by-distance` (2.4), did not touch `src/services/haversine.ts` or `src/geocoding/`, did not add a general-purpose `findAll()` repository method (not needed for a bare count).
+- `src/routes/.gitkeep` removed (superseded by real `customersRoutes.ts`, same pattern as prior stories' `.gitkeep` removals).
+- New project-level file not anticipated in the original task breakdown: `vitest.config.ts` (`fileParallelism: false`) — necessary infrastructure fix for a pre-existing latent cross-file DB race this story's new integration test exposed (see Debug Log References). No test logic in other stories' files was modified.
+
 ### File List
+
+**New:**
+- `src/routes/customersRoutes.ts`
+- `src/services/customersService.ts`
+- `test/unit/customersRepository.test.ts`
+- `test/integration/customersCount.test.ts`
+- `vitest.config.ts`
+
+**Modified:**
+- `src/repositories/customersRepository.ts` (added `countCustomers()`, `parseCountResult()`, exported `Queryable`)
+- `src/app.ts` (wired `/customers` router via `createCustomersRouter(pool)`)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (`2-3-get-customers-count`: `backlog` → `ready-for-dev` → `in-progress` → `review`)
+
+**Removed:**
+- `src/routes/.gitkeep`
+
+### Change Log
+
+- 2026-07-19: Story created (`bmad-create-story` workflow), Status `ready-for-dev`.
+- 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode). Added `countCustomers()`/`parseCountResult()` to the repository, a thin `customersService.ts#getCustomerCount()`, and `customersRoutes.ts#createCustomersRouter()` (DB dependency as a plain parameter, not a singleton import, to keep integration tests genuinely isolated to `TEST_DATABASE_URL` per AD-9). Wired into `app.ts`. Added `test/unit/customersRepository.test.ts` (7 cases) and `test/integration/customersCount.test.ts` (3 cases, real Postgres, real HTTP). Discovered and fixed a pre-existing cross-file DB race between integration test files via `vitest.config.ts` (`fileParallelism: false`). `npm test`: 65/65, confirmed stable across 3 consecutive runs. Manual verification: real server + real seeded dev DB (15 customers) → `curl /customers/count` → `{"count":15}`. Server stopped after. Status `in-progress` → `review`.
