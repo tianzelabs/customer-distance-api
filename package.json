@@ -11,12 +11,14 @@
     "build": "tsc",
     "migrate:create": "node-pg-migrate create",
     "migrate:up": "node-pg-migrate up",
-    "migrate:down": "node-pg-migrate down"
+    "migrate:down": "node-pg-migrate down",
+    "test": "vitest run"
   },
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^24.13.3",
-    "typescript": "6.0.2"
+    "typescript": "6.0.2",
+    "vitest": "4.1.10"
   },
   "dependencies": {
     "node-pg-migrate": "8.0.4",
