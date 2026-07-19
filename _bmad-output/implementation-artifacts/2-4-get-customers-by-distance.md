@@ -4,7 +4,7 @@ baseline_commit: c59b9b56d85bf2c7701b1ec38a95cce03082b2a9
 
 # Story 2.4: GET /customers/by-distance
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -97,6 +97,40 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 ### Debug Log References
 
+- `npx tsc --noEmit` — clean after every implementation step.
+- `npm test` (`vitest run`, real Postgres on port 5433): **11 test files passed, 99 tests passed** (72 pre-existing + 27 new: `customersRepository.test.ts` grew from 11 to 21 tests (+10: 7 `parseCustomerId` + 3 `mapRowToCustomer`); `customersService.test.ts` grew from 2 to 11 tests (+9 `assembleCustomersWithDistance`); new `customersByDistance.test.ts` adds 8). Ran 3x consecutively: 99/99, 99/99, 99/99 — no flakiness.
+- **Rounding-example correction caught mid-implementation:** the first draft of the rounding-footgun code comment and its regression test used `1.005` as the "classic footgun" example, copying the commonly-cited 2-decimal (cents) rounding example without checking it against 1-decimal rounding. Verified in Node that `1.005` actually rounds correctly to `1.0` at 1-decimal precision (it's closer to 1.0 than 1.1), so the original example was arithmetically wrong for this function's actual granularity. Found a real, Node-verified 1-decimal boundary case instead (`2.4 + 0.05` evaluates to `2.4499999999999997`, which naively rounds to `2.4` instead of the correct `2.5`) and fixed both the code comment (`src/services/customersService.ts`) and the regression test (`test/unit/customersService.test.ts`) to use it, with the exact float value asserted inline so the premise is self-verifying, not just asserted in prose.
+- **id/lat/lon/budget coercion scope check:** verified (Node docs + `pg`'s default type parsers) that only `int8`/`bigint`-typed columns (here, just `id`, a `BIGSERIAL`) come back from `pg` as strings — `double precision` (`lat`/`lon`) and `integer` (`budget`) are auto-parsed to JS `number` already. This meant only `id` needed the new coercion helper; `lat`/`lon`/`budget` are passed through as-is in `mapRowToCustomer`, avoiding unnecessary coercion code.
+- Manual end-to-end verification: started the real server (`npx tsx src/server.ts`, real `.env`, `PORT=3000`, real seeded dev DB with 15 real customers). Console: `[api] Listening on port 3000`. `curl -s http://localhost:3000/customers/by-distance` → 15-element JSON array, 0 null-distanceKm entries (expected — all 15 real seed towns match the reference). First entries: Anna Kovács (Budapest) `distanceKm: 0`; Lena Fischer (Vienna) `214`; Katarzyna Nowak (Kraków) `293`; Matej Horvat (Ljubljana) `380.6`; Petra Horáková (Prague) `442.4`. Last entry: Isabella Silva (Lisbon) `2469.4`, the farthest city, as expected. Ascending order verified across all 15. Server then stopped; follow-up curl confirmed connection refused. Dev DB re-checked via `docker compose exec postgres psql` — still exactly 15 rows (the TEST_DATABASE_URL-only integration tests never touched it).
+
 ### Completion Notes List
 
+- AC #1 verified: `GET /customers/by-distance` returns a bare JSON array; each element carries `id` (number), `name`, `telepules`, `lat`, `lon`, plus `distanceKm` (1-decimal rounded number, or `null`). Proven by `test/integration/customersByDistance.test.ts`'s shape-check test and the manual curl against the real dev DB.
+- AC #2 verified: `budget`/`note`/`countryCode` are omitted (not explicit `null`) when the DB column is `NULL` — implemented once, at the repository row-mapping layer (`mapRowToCustomer`), documented as a deliberate design choice so `res.json()` needs zero special-casing (`JSON.stringify` already drops `undefined` keys while keeping explicit `null`). Proven by unit tests (`mapRowToCustomer`, `assembleCustomersWithDistance`) and an integration test that additionally greps the raw response text for `"budget":null` etc. to rule out explicit-null leakage.
+- AC #3 verified: a Budapest-coordinate fixture returns `distanceKm: 0` and sorts first among non-null distances (integration + unit tests); confirmed against the real dev DB (Anna Kovács, `distanceKm: 0`, first in the response).
+- AC #4 verified: a null-lat/lon fixture returns `distanceKm: null` and sorts to the very end of the array, even with other non-null-distance customers present (integration + unit tests).
+- AC #5 verified: full deterministic tiebreak (distanceKm asc → name asc → id asc, null-distanceKm group last with the same tiebreak) proven at both layers — unit tests construct genuine ties via identical lat/lon (bit-identical `distanceKm`) and identical names+null coordinates; the integration test does the same over real Postgres/HTTP.
+- AC #6 verified: `parseCustomerId()` (sharing `parseCountResult()`'s extracted `parseSafeNonNegativeInteger` helper) coerces the `pg`-string `id` column to a validated `number`; `typeof element.id === 'number'` asserted in the integration test.
+- AC #7 verified: `test/integration/customersByDistance.test.ts` covers all three FR-11 cases against real (non-mocked) Postgres in one combined test plus individual focused tests: 0km, name-ascending tie-break, unknown-town-at-end.
+- Rounding: `Math.round((value + Number.EPSILON) * 10) / 10`, not naive `Math.round(value * 10) / 10` — see Debug Log for the corrected, Node-verified footgun example (`2.4 + 0.05` → `2.4499999999999997` → naive rounds to `2.4`, EPSILON-adjusted correctly rounds to `2.5`).
+- Sort: plain `<`/`>` string comparison for the `name` tiebreak (not `localeCompare`), for cross-environment determinism independent of Node's ICU build — documented in both the story Dev Notes and the code comment.
+- Scope discipline: did not modify `src/services/haversine.ts` or `src/geocoding/`; did not touch `/customers/count`'s route/behavior (only its repository dependency, `parseCountResult`, was refactored to share a helper — its exact existing behavior, error message, and all 11 pre-existing unit tests are unchanged/still passing); no pagination/filtering added.
+- `[ASSUMPTION]` Route path is `/customers/by-distance` (mounted the same way as `/customers/count`, under the existing `createCustomersRouter(db)` factory) — matches both `epics.md`'s AC text and the Architecture Spine's sequence-diagram title exactly, no ambiguity to flag.
+
 ### File List
+
+**New:**
+- `test/integration/customersByDistance.test.ts`
+
+**Modified:**
+- `src/repositories/customersRepository.ts` (added `findAll()`, `mapRowToCustomer()`, `CustomerWithDistance`, `parseCustomerId()`, extracted `parseSafeNonNegativeInteger()`)
+- `src/services/customersService.ts` (added `assembleCustomersWithDistance()`, `getCustomersByDistance()`, `computeDistanceKm()`, `roundToOneDecimal()`, `compareByDistanceThenNameThenId()`)
+- `src/routes/customersRoutes.ts` (added `GET /by-distance`)
+- `test/unit/customersRepository.test.ts` (added `parseCustomerId`/`mapRowToCustomer` unit tests)
+- `test/unit/customersService.test.ts` (added `assembleCustomersWithDistance` unit tests)
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (`2-4-get-customers-by-distance`: `backlog` → `ready-for-dev` → `in-progress` → `review`; `epic-2`: `in-progress` → `done`)
+
+### Change Log
+
+- 2026-07-19: Story created (`bmad-create-story` workflow), Status `ready-for-dev`.
+- 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode). Added `findAll()`/`mapRowToCustomer()`/`CustomerWithDistance`/`parseCustomerId()` to the repository (extracting a shared `parseSafeNonNegativeInteger()` helper from `parseCountResult()` without changing its behavior), `assembleCustomersWithDistance()`/`getCustomersByDistance()` to the service (pure distanceKm assembly + EPSILON-corrected rounding + deterministic sort), and `GET /by-distance` to the route. Added unit tests (repository row-mapping/id-coercion, service rounding/sorting with fake fixtures) and `test/integration/customersByDistance.test.ts` (real Postgres, real HTTP, dedicated fixtures covering 0km/tie-break/unknown-town). `npm test`: 99/99, stable across 3 consecutive runs. Manual verification: real server + real seeded dev DB (15 customers) → `curl /customers/by-distance` → correctly sorted array, Anna Kovács (Budapest) `distanceKm: 0` first, Isabella Silva (Lisbon) farthest last. Dev DB confirmed still exactly 15 rows after. Server stopped after. Status `in-progress` → `review`.
