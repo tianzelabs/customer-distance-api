@@ -4,7 +4,7 @@ baseline_commit: b4bdee539af34d018eb813c324a1eaace836f699
 
 # Story 1.2: `customers` tábla migráció
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -33,31 +33,32 @@ hogy legyen hova betölteni a seed-adatot.
   - [x] Adj hozzá három npm scriptet a `package.json`-hoz: `"migrate:create": "node-pg-migrate create"`, `"migrate:up": "node-pg-migrate up"`, `"migrate:down": "node-pg-migrate down"`.
   - [x] Ellenőrizd: `npx node-pg-migrate --help` hibamentesen fut és megmutatja a CLI opciókat (`DATABASE_URL` env változó az alapértelmezett kapcsolat-forrás, `migrations/` az alapértelmezett könyvtár).
 
-- [ ] **Task 2 — Migrációs fájl generálása `node-pg-migrate create`-tel (AC: #4)**
-  - [ ] Futtasd: `npm run migrate:create -- create_customers_table` — ez a `node-pg-migrate` saját időbélyeg-alapú elnevezését használja (`<timestamp>_create_customers_table.js`), nem kézzel írt sorszámot.
-  - [ ] A generált fájl alapértelmezett nyelve JavaScript (`.js`, `migration-file-language` default: `js`, mivel még nincs korábbi migráció a repóban) — ez szándékos döntés: elkerüli a TypeScript migrációs fájlokhoz szükséges `ts-node`/`tsx` extra függőséget és a `NodeNext`+`"type": "module"` explicit `.js` kiterjesztés-igényéből fakadó bonyodalmat migrációs fájloknál (ld. Dev Notes — Story 1.1 review finding erről). A `package.json` `"type": "module"` miatt a `.js` fájl natívan ESM-ként fut (`export const up = ...` szintaxis).
+- [x] **Task 2 — Migrációs fájl generálása `node-pg-migrate create`-tel (AC: #4)**
+  - [x] Futtasd: `npm run migrate:create -- create_customers_table` — ez a `node-pg-migrate` saját időbélyeg-alapú elnevezését használja (`<timestamp>_create_customers_table.js`), nem kézzel írt sorszámot. Eredmény: `migrations/1784457387443_create-customers-table.js`.
+  - [x] A generált fájl alapértelmezett nyelve JavaScript (`.js`, `migration-file-language` default: `js`, mivel még nincs korábbi migráció a repóban) — ez szándékos döntés: elkerüli a TypeScript migrációs fájlokhoz szükséges `ts-node`/`tsx` extra függőséget és a `NodeNext`+`"type": "module"` explicit `.js` kiterjesztés-igényéből fakadó bonyodalmat migrációs fájloknál (ld. Dev Notes — Story 1.1 review finding erről). A `package.json` `"type": "module"` miatt a `.js` fájl natívan ESM-ként fut (`export const up = ...` szintaxis).
 
-- [ ] **Task 3 — `up`/`down` implementálása a pontos DDL-lel (AC: #1, #2, #3, #7)**
-  - [ ] Töltsd ki a generált migrációs fájl `up` exportját az `ARCHITECTURE-SPINE.md#customers table (DDL shape)` szakaszban megadott pontos DDL-lel: `id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, telepules TEXT NOT NULL, lat DOUBLE PRECISION NULL, lon DOUBLE PRECISION NULL, budget INTEGER NULL, note TEXT NULL, country_code VARCHAR(2) NULL`, `UNIQUE(name, telepules)`, a két lat/lon-tartomány `CHECK` és a páros nullness `CHECK`.
-  - [ ] Töltsd ki a `down` exportot: dobja el a `customers` táblát (`pgm.dropTable('customers')` — a constraintek a táblával együtt automatikusan eltűnnek, nincs szükség külön `dropConstraint` hívásra).
-  - [ ] Használd a `node-pg-migrate` deklaratív `pgm.createTable(...)` API-ját (nem nyers `pgm.sql(...)` string), hogy a `down` szimmetrikusan `pgm.dropTable(...)`-tel visszavonható legyen — konzisztens az AD-7 "reversible" követelményével.
+- [x] **Task 3 — `up`/`down` implementálása a pontos DDL-lel (AC: #1, #2, #3, #7)**
+  - [x] Töltsd ki a generált migrációs fájl `up` exportját az `ARCHITECTURE-SPINE.md#customers table (DDL shape)` szakaszban megadott pontos DDL-lel: `id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, telepules TEXT NOT NULL, lat DOUBLE PRECISION NULL, lon DOUBLE PRECISION NULL, budget INTEGER NULL, note TEXT NULL, country_code VARCHAR(2) NULL`, `UNIQUE(name, telepules)`, a két lat/lon-tartomány `CHECK` és a páros nullness `CHECK`. **Nem-nyilvánvaló buktató, amit itt fedeztem fel és javítottam:** a `node-pg-migrate` `id: 'id'` shorthand-ja alapértelmezetten `SERIAL PRIMARY KEY`-t generál, NEM `BIGSERIAL`-t (ellenőrizve `node_modules/node-pg-migrate/dist/bundle/index.js`-ben: `id: { type: "serial", primaryKey: true }`) — az AC #1 explicit `BIGSERIAL`-t követel, ezért explicit `{ type: 'bigserial', primaryKey: true }` oszlop-definíciót használtam a shorthand helyett.
+  - [x] Töltsd ki a `down` exportot: dobja el a `customers` táblát (`pgm.dropTable('customers')` — a constraintek a táblával együtt automatikusan eltűnnek, nincs szükség külön `dropConstraint` hívásra).
+  - [x] Használd a `node-pg-migrate` deklaratív `pgm.createTable(...)` API-ját (nem nyers `pgm.sql(...)` string), hogy a `down` szimmetrikusan `pgm.dropTable(...)`-tel visszavonható legyen — konzisztens az AD-7 "reversible" követelményével.
 
-- [ ] **Task 4 — Migráció futtatása és séma-ellenőrzés valódi Postgres ellen (AC: #1, #2, #3)**
-  - [ ] `DATABASE_URL` legyen beállítva a `.env.example`-ben dokumentált dev-DB-re (`postgresql://postgres:postgres@localhost:5433/customer_distance`) — a Postgres konténer már fut ebben a session-ben.
-  - [ ] Futtasd: `npm run migrate:up`.
-  - [ ] Ellenőrizd `docker compose exec postgres psql -U postgres -d customer_distance -c "\d customers"`: minden oszlop jelen van a helyes típussal, a `UNIQUE` és mindhárom `CHECK` megszorítás látszik.
-  - [ ] Ellenőrizd az `information_schema.columns` és `information_schema.table_constraints`/`check_constraints` nézeteken keresztül is, hogy a megszorítások pontosan a specifikációnak megfelelnek (nem csak vizuálisan a `\d` kimeneten).
+- [x] **Task 4 — Migráció futtatása és séma-ellenőrzés valódi Postgres ellen (AC: #1, #2, #3)**
+  - [x] `DATABASE_URL` legyen beállítva a `.env.example`-ben dokumentált dev-DB-re (`postgresql://postgres:postgres@localhost:5433/customer_distance`) — a Postgres konténer már fut ebben a session-ben.
+  - [x] Futtasd: `npm run migrate:up`. Sikeres, a generált SQL pontosan a várt DDL-t futtatta (`CREATE TABLE`, majd 4 db `ADD CONSTRAINT`).
+  - [x] Ellenőrizd `docker compose exec postgres psql -U postgres -d customer_distance -c "\d customers"`: minden oszlop jelen van a helyes típussal (`bigint` a `bigserial`-ból, `text`, `double precision`, `integer`, `character varying(2)`), a `UNIQUE` és mindhárom `CHECK` megszorítás látszik.
+  - [x] Ellenőrizd az `information_schema.columns` és `information_schema.table_constraints`/`check_constraints` nézeteken keresztül is — pontosan megfelel a specifikációnak (nullability, `character_maximum_length=2` a `country_code`-on, mind a 4 explicit constraint + 3 NOT NULL check + PK jelen van).
+  - [x] **Extra funkcionális verifikáció (nem volt kötelező task-elem, de erős elfogadási bizonyíték):** érvényes sorok (Budapest koordinátával, illetve null lat/lon-nal) sikeresen beszúrhatók; érvénytelen sorok (lat=999, lon=999, lat kitöltve+lon null, duplikált name+telepules) mindegyike a várt constraint-tel elutasításra került (`customers_lat_check`, `customers_lon_check`, `customers_lat_lon_pair_check`, `customers_name_telepules_key`). Teszt-sorok törölve, a tábla üresen maradt a következő story-k számára.
 
-- [ ] **Task 5 — Re-run biztonság és rollback ellenőrzése (AC: #5, #6)**
-  - [ ] Futtasd újra: `npm run migrate:up` — a `node-pg-migrate` saját `pgmigrations` követő táblája miatt ennek no-op-nak kell lennie (nincs hiba, nincs duplikált sémaelem, a CLI kiírja, hogy nincs futtatandó migráció).
-  - [ ] Futtasd: `npm run migrate:down` — ellenőrizd `\dt`/`\d customers`-sel, hogy a `customers` tábla és minden megszorítása eltűnt, hiba nélkül.
-  - [ ] Futtasd újra: `npm run migrate:up`, hogy a DB-t alkalmazott állapotban hagyd a következő story-k számára (1.3+ a `customers` táblára fog építeni).
-  - [ ] Végső ellenőrzés: `\d customers` mutatja a teljes, helyes sémát az alkalmazott állapotban.
+- [x] **Task 5 — Re-run biztonság és rollback ellenőrzése (AC: #5, #6)**
+  - [x] Futtasd újra: `npm run migrate:up` — no-op volt: `"No migrations to run!"`, nincs hiba, nincs duplikált sémaelem.
+  - [x] Futtasd: `npm run migrate:down` — ellenőrizve `\d customers`-sel: `"Did not find any relation named customers"`, azaz a tábla és minden megszorítása eltűnt, hiba nélkül.
+  - [x] Futtasd újra: `npm run migrate:up`, hogy a DB-t alkalmazott állapotban hagyd a következő story-k számára (1.3+ a `customers` táblára fog építeni). Sikeres, a séma bit-azonos az első futtatással.
+  - [x] Végső ellenőrzés: `\d customers` mutatja a teljes, helyes sémát az alkalmazott állapotban, üres táblával (0 sor).
 
-- [ ] **Task 6 — Story-dokumentáció és delivery (delivery norma, NFR7)**
-  - [ ] Frissítsd ezt a story fájlt: Tasks pipálása, Dev Agent Record kitöltése, Status `in-progress` → `review`.
-  - [ ] Frissítsd a `sprint-status.yaml`-t: `1-2-customers-tabla-migracio` `backlog` → `ready-for-dev` → `in-progress` → `review`.
-  - [ ] Kis, fókuszált commitok: (1) tooling telepítés + npm scriptek, (2) a migrációs fájl + verifikáció. Nincs egyetlen mindent-összefogó záró commit (NFR7).
+- [x] **Task 6 — Story-dokumentáció és delivery (delivery norma, NFR7)**
+  - [x] Frissítsd ezt a story fájlt: Tasks pipálása, Dev Agent Record kitöltése, Status `in-progress` → `review`.
+  - [x] Frissítsd a `sprint-status.yaml`-t: `1-2-customers-tabla-migracio` `backlog` → `ready-for-dev` → `in-progress` → `review`.
+  - [x] Kis, fókuszált commitok: (1) story-fájl létrehozása, (2) tooling telepítés + npm scriptek, (3) a migrációs fájl + verifikáció + story lezárás. Nincs egyetlen mindent-összefogó záró commit (NFR7).
 
 ## Dev Notes
 
@@ -104,12 +105,24 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 ### Completion Notes List
 
-(kitöltendő az implementáció végén)
+- Mind a 7 AC verifikálva valódi, futó Postgres ellen (nem mockolt): oszlopok/típusok `\d customers` és `information_schema.columns`-szal; `UNIQUE`/3× `CHECK` `information_schema.table_constraints`/`check_constraints`-szal; explicit `up`/`down` export a migrációs fájlban; `node-pg-migrate create`-tel generált időbélyeg-alapú fájlnév; `down` hiba nélkül eltünteti a táblát és minden megszorítását; kétszeri `up` no-op (`"No migrations to run!"`).
+- Extra, nem kötelező de erős elfogadási bizonyíték: funkcionális negatív tesztek (`INSERT`) mindhárom `CHECK` és a `UNIQUE` megszorítást ténylegesen kikényszerítik futásidőben, nem csak a séma-deklaráció szintjén léteznek.
+- Nem-nyilvánvaló buktató: a `node-pg-migrate` `id: 'id'` beépített shorthand-ja `SERIAL`-t (int4) generál, nem `BIGSERIAL`-t — ezt csak a `node_modules` forráskódjának ellenőrzésével fedeztem fel a `pgm.createTable` megírása közben, és explicit `{ type: 'bigserial', primaryKey: true }`-jal javítottam, mielőtt a migrációt lefuttattam volna. Ha ezt nem veszem észre, az AC #1 (`id BIGSERIAL PK`) csendben sérült volna.
+- Verzió-currency megjegyzés (nem blokkoló, dokumentált döntés): az npm registry ma (2026-07-19) `9.0.0`-t mutat `node-pg-migrate` `latest` dist-tag-ként (már nem alpha, ahogy az Architecture Spine 1 nappal korábbi szövege feltételezte). A ratifikált `8.0.4` pontos pin mellett maradtam — ez nem architektúra-módosítás, csak a story hatóköre; ld. Dev Notes.
+- A `customers` tábla a story végén alkalmazott (`up`) állapotban, üresen (0 sor) marad a Postgres dev-adatbázisban — készen áll az 1.4 (seed) story számára. A Postgres konténer futva marad (nem állítottam le), mivel a session folytatódik további story-kkal.
+- Nincs unit/integrációs teszt-fájl ehhez a story-hoz (szándékosan) — DDL-migrációnak nincs alkalmazás-szintű logikája, amit unit-tesztelni lehetne; az elfogadási bizonyíték a fenti psql/`information_schema` verifikáció és a funkcionális constraint-tesztek (ld. Task 4).
 
 ### File List
 
-(kitöltendő az implementáció végén)
+**New:**
+- `migrations/1784457387443_create-customers-table.js`
+
+**Modified:**
+- `package.json` (node-pg-migrate 8.0.4 devDependency, pg 8.22.0 dependency, migrate:create/up/down npm scripts)
+- `package-lock.json`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (1-2-customers-tabla-migracio: backlog → ready-for-dev → in-progress → review; last_updated: 2026-07-19)
 
 ### Change Log
 
 - 2026-07-19: Story létrehozva (`bmad-create-story` workflow), Status `ready-for-dev`.
+- 2026-07-19: Story implementálva (`bmad-dev-story` workflow, autonomous mode) — Tasks 1–6 elvégezve, mind a 7 AC verifikálva valódi Postgres ellen. Status `in-progress` → `review`.
