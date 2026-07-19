@@ -4,7 +4,7 @@ baseline_commit: 661945304e489f3803686fa1a3c2f9ba11d4896f
 
 # Story 1.4: Idempotens seed script
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -120,6 +120,41 @@ claude-sonnet-5 (Claude Code, bmad-dev-story workflow, autonomous mode)
 
 ### Debug Log References
 
+- `node --experimental-strip-types` repro (this session): a minimal two-file `.ts`→`.ts` (via `.js`-suffixed relative import, the repo's NodeNext convention) case failed with `ERR_MODULE_NOT_FOUND` under Node's native type-stripping. The identical repro ran clean under `npx tsx@4.23.1`. This confirmed the `tsx` decision documented in Dev Notes.
+- `test/integration/seed.test.ts` initially failed with `error: relation "customers" does not exist` — the `customer_distance_test` DB had never been migrated (Story 1.2 only migrated the dev DB). Fixed by running `DATABASE_URL=postgresql://postgres:postgres@localhost:5433/customer_distance_test npx node-pg-migrate up` once in this session (not a story code change — a one-time local environment step; README, Story 3.1, should document that both DBs need migrating).
+- `npx tsc --noEmit` initially failed with `TS7016` on `pg` imports (`Could not find a declaration file for module 'pg'`) — fixed by installing `@types/pg@8.20.0` as an exact-pinned devDependency.
+- Fail-fast paths manually exercised for real, not just claimed: (1) `.env` temporarily moved aside, `node --import tsx -e "import('./src/config/env.js')"` → `Error: [config] Missing required environment variable: DATABASE_URL...` (`.env` restored immediately after); (2) `PORT=notanumber` → `Error: [config] PORT must be an integer between 1 and 65535, got "notanumber"`; (3) `TEST_DATABASE_URL="" node ... requireTestDatabaseUrl()` → `Error: [config] Missing required environment variable: TEST_DATABASE_URL. Integration tests must never fall back to DATABASE_URL (AD-9)...`.
+
 ### Completion Notes List
 
+- All 8 ACs verified end-to-end against real, running Postgres (not mocked): AC #1 (`env.ts`/`pool.ts` created, fail-fast manually verified for `DATABASE_URL` missing, `PORT` invalid, and `TEST_DATABASE_URL` missing — see Debug Log), AC #2/#4 (real `npm run seed` run twice against the dev DB, `customer_distance`), AC #3 (`Niamh O'Brien` present, correct, unmangled after two upserts), AC #5 (dedicated fixture integration test), AC #6/#7 (`Customer`/`UpsertCustomerInput` types + parameterized-only `upsertCustomer`), AC #8 (`test/integration/seed.test.ts` against `TEST_DATABASE_URL`, `requireTestDatabaseUrl()` fail-stop, never falls back to `DATABASE_URL`).
+- `npm run test:unit` (`vitest run test/unit`): **3 test files, 38 tests passed**, run with `DATABASE_URL`/`TEST_DATABASE_URL` explicitly unset (`env -u DATABASE_URL -u TEST_DATABASE_URL`) to prove `resolveCoordinates()`'s unit test needs no DB config at all — confirms the deliberate `main()`-only dynamic import of `db/pool.js` in `seed.ts` actually decouples unit-testability from DB config, not just in theory.
+- `npm run test:integration` (`vitest run test/integration`, against `TEST_DATABASE_URL` / `customer_distance_test`): **1 test file, 2 tests passed** — idempotency (15 rows after 2 runs, `Niamh O'Brien` intact) and dedicated unknown-town fixture (null lat/lon + processing continued to the next record).
+- `npm test` (`vitest run`, both suites together): **4 test files, 40 tests passed**, ~230ms.
+- Real dev-DB seed run (`npm run seed`, `customer_distance`), executed twice: first run inserted 15 rows, second run left the table at exactly 15 rows (`SELECT COUNT(*)` verified via `docker compose exec postgres psql`) — `id`s stayed `1..15` (upsert, not insert-then-conflict-skip). Anna Kovács (Budapest) row: `lat=47.4979, lon=19.0402`, bit-for-bit equal to `BUDAPEST_REF`. Niamh O'Brien (Dublin) row present exactly once, name/apostrophe intact, `lat=53.3498, lon=-6.2603`. All 15 real seed towns matched the reference — no `[seed] Unknown town` warnings were logged for real data, as expected (PRD FR-5/FR-10 note-for-PM).
+- Scope discipline: did not create `src/app.ts`/`src/server.ts`/routes/services/middleware; did not implement any `GET` endpoint; did not add `findAll()`/`count()` to the repository (2.3/2.4's job); did not touch `.mcp.json` (1.5).
+- `dotenv`/`tsx`/`@types/pg` — decisions and rationale documented in Dev Notes (`[ASSUMPTION]` tags), including the concrete `node --experimental-strip-types` failure repro that ruled it out.
+
 ### File List
+
+**New:**
+- `src/config/env.ts`
+- `src/db/pool.ts`
+- `src/repositories/customersRepository.ts`
+- `src/seed.ts`
+- `test/unit/seed.test.ts`
+- `test/integration/seed.test.ts`
+
+**Modified:**
+- `package.json` (added `dotenv@17.4.2`, `tsx@4.23.1` dependencies; `@types/pg@8.20.0` devDependency; `seed`/`test:unit`/`test:integration` npm scripts)
+- `package-lock.json`
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` (`1-4-idempotens-seed-script`: `backlog` → `ready-for-dev` → `in-progress` → `review`; `last_updated: 2026-07-19`)
+
+**Removed:**
+- `src/config/.gitkeep`, `src/db/.gitkeep`, `src/repositories/.gitkeep` (superseded by real source files)
+- `test/integration/.gitkeep` (superseded by `test/integration/seed.test.ts`)
+
+### Change Log
+
+- 2026-07-19: Story created (`bmad-create-story` workflow), Status `ready-for-dev`.
+- 2026-07-19: Story implemented (`bmad-dev-story` workflow, autonomous mode) — Tasks 1–8 completed. `env.ts`/`pool.ts`/`customersRepository.ts`/`seed.ts` implemented; 38 unit + 2 integration tests written and run for real (40/40 passing); real dev-DB seed run twice, verified 15 rows via psql, apostrophe/Budapest spot-checks passed. Status `in-progress` → `review`.
